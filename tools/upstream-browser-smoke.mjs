@@ -400,6 +400,51 @@ try {
 
   await page.evaluate(() => {
     window.__nativeSocketSends.length = 0;
+    window.WG.setActionLoadout("buttons", "say loadout-smoke", 2);
+    const button = document.createElement("span");
+    button.className = "act-item WG_loadout_smoke_action";
+    button.setAttribute("cmd", "say loadout-smoke");
+    button.textContent = "配装烟测";
+    document.querySelector(".room-commands").appendChild(button);
+    button.click();
+  });
+  await page.waitForTimeout(100);
+  const loadoutPendingSends = await page.evaluate(() => [
+    ...window.__nativeSocketSends,
+  ]);
+  if (
+    loadoutPendingSends[0] !== "eqgroup 2" ||
+    loadoutPendingSends.includes("say loadout-smoke")
+  )
+    throw new Error(
+      "动作栏按钮未先换装并等待配装确认：" +
+        JSON.stringify(loadoutPendingSends),
+    );
+  await page.evaluate(() => {
+    window.__nativeSockets[0].onmessage({
+      data: JSON.stringify({
+        type: "dialog",
+        dialog: "pack",
+        items: [],
+        eqs: [],
+        eq_group: 2,
+      }),
+    });
+  });
+  await page.waitForTimeout(100);
+  const loadoutCompletionSends = await page.evaluate(() => [
+    ...window.__nativeSocketSends,
+  ]);
+  if (loadoutCompletionSends.join("|") !== "eqgroup 2|say loadout-smoke")
+    throw new Error(
+      "配装确认后未只执行一次原动作：" +
+        JSON.stringify(loadoutCompletionSends),
+    );
+
+  await page.evaluate(() => {
+    window.WG.resetActionLoadoutConfig();
+    document.querySelector(".WG_loadout_smoke_action")?.remove();
+    window.__nativeSocketSends.length = 0;
     window.__wgSendCalls = [];
     const originalSend = window.WG.Send;
     window.WG.Send = function (command) {
@@ -476,7 +521,22 @@ try {
     ...window.__nativeSocketSends,
   ]);
   if (!cleanupCompletionSends.includes("sell all"))
-    throw new Error("清包收到仓库/背包协议后没有继续前往杂货铺售卖");
+    throw new Error(
+      "清包收到仓库/背包协议后没有继续前往杂货铺售卖\n" +
+        JSON.stringify(
+          {
+            cleanupCompletionSends,
+            cleanupState: await page.evaluate(() => ({
+              packupReady: window.WG?.packup_ready,
+              packupListener: window.WG?.packup_listener,
+              actionLoadouts: window.WG?.getActionLoadoutConfig?.(),
+            })),
+            pageErrors,
+          },
+          null,
+          2,
+        ),
+    );
   if (!cleanupCompletionSends.includes("store 2 smoke-store-item"))
     throw new Error("清包没有解码压缩背包条目并执行存仓");
 

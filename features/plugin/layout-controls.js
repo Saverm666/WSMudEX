@@ -585,8 +585,11 @@
           .off("click.WG_quick_loadout")
           .on("click.WG_quick_loadout", ".WG_quick_loadout", function () {
             var equipmentGroup = Number($(this).attr("data-equipment-group"));
-            if (equipmentGroup >= 0 && equipmentGroup < 3)
+            if (equipmentGroup >= 0 && equipmentGroup < 3) {
+              typeof WG.beginDashboardEquipmentBatch === "function" &&
+                WG.beginDashboardEquipmentBatch();
               WG.Send("eqgroup " + equipmentGroup);
+            }
           });
         $(".WG_equipment_picker")
           .off("click.WG_equipment_picker")

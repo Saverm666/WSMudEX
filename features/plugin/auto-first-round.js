@@ -280,16 +280,37 @@
         WG.autoFirstRoundActive = false;
         WG.autoFirstRoundQueue = [];
         WG.autoFirstRoundIndex = 0;
+        WG.autoFirstRoundReadyAt = 0;
+      },
+      cancelAutoFirstRound: function () {
+        WG.autoFirstRoundActive = false;
+        WG.autoFirstRoundQueue = [];
+        WG.autoFirstRoundIndex = 0;
+        WG.autoFirstRoundReadyAt = 0;
+      },
+      getAutoFirstRoundReleaseDelay: function () {
+        var releaseTime = G.score2 && G.score2.releasetime,
+          match = String(releaseTime == null ? "" : releaseTime)
+            .replace(/<[^>]*>/g, "")
+            .match(/(-?\d+(?:\.\d+)?)\s*秒/),
+          releaseDelay = match ? Number(match[1]) * 1000 : 0;
+        return Math.max(350, Number.isFinite(releaseDelay) ? releaseDelay : 0);
       },
       prepareAutoFirstRound: function () {
-        if (!G.in_fight || WG.autoFirstRoundPrepared) return;
+        if (!G.auto_preform || !G.in_fight || WG.autoFirstRoundPrepared) return;
         WG.autoFirstRoundPrepared = true;
         WG.autoFirstRoundQueue = WG.loadAutoFirstRoundConfig().slice();
         WG.autoFirstRoundIndex = 0;
+        WG.autoFirstRoundReadyAt = 0;
         WG.autoFirstRoundActive = WG.autoFirstRoundQueue.length > 0;
       },
       processAutoFirstRound: function () {
+        if (!G.auto_preform) {
+          WG.cancelAutoFirstRound();
+          return false;
+        }
         if (!WG.autoFirstRoundActive) return false;
+        if (Date.now() < (WG.autoFirstRoundReadyAt || 0)) return true;
         if (G.gcd || !WG.is_free()) return true;
         var skills = WG.getAutoFirstRoundSkills(),
           available = {};
@@ -299,9 +320,12 @@
             WG.autoFirstRoundQueue[WG.autoFirstRoundIndex++];
           if (!available[skillId] || G.cds.get(skillId)) continue;
           WG.Send("perform " + skillId);
+          WG.autoFirstRoundReadyAt =
+            Date.now() + WG.getAutoFirstRoundReleaseDelay();
           return true;
         }
         WG.autoFirstRoundActive = false;
+        WG.autoFirstRoundReadyAt = 0;
         return false;
       },
     });

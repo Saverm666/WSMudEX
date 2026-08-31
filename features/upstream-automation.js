@@ -3552,7 +3552,10 @@
             }
         },
         is_zero_releasetime: function () {
-            return G.score2.releasetime.indexOf('0秒') >= 0;
+            var releaseTime = G.score2 && G.score2.releasetime;
+            if (releaseTime == null) return false;
+            var match = String(releaseTime).replace(/<[^>]*>/g, "").match(/(-?\d+(?:\.\d+)?)\s*秒/);
+            return !!match && Number(match[1]) === 0;
         },
         auto_preform: function (v) {
             if (v == "stop") {
@@ -3569,6 +3572,12 @@
                 return;
             }
             if (G.preform_timer || G.auto_preform == false) return;
+            if (typeof WG.prepareAutoFirstRound == "function") {
+                WG.prepareAutoFirstRound();
+            }
+            if ((!G.score2 || G.score2.releasetime == null) && typeof WG.requestAutomationScore2 == "function") {
+                WG.requestAutomationScore2();
+            }
             $(".auto_perform").css("background", "#3E0000");
             //出招时重新获取黑名单
             unauto_pfm = GM_getValue(roleid + "_unauto_pfm", unauto_pfm);
@@ -3600,6 +3609,7 @@
                 WG.pfmskill = null
                 G.preform_timer = setInterval(() => {
                     if (G.in_fight == false) { WG.auto_preform("stop"); return; }
+                    if (typeof WG.processAutoFirstRound == "function" && WG.processAutoFirstRound()) return;
                     var alreay_pfm = [];
                     if (WG.xubuf == null) {
                         WG.xubuf = setTimeout(async () => {
@@ -3665,7 +3675,7 @@
                                 // console.log(skill);
                                 if (!G.gcd && !G.cds.get(skill.id) && !(WG.hasStr(skill.id, force_buff_skill) || WG.hasStr(skill.id, buff_skill_dict))) {
                                     WG.Send("perform " + skill.id);
-                                    if (WG.is_zero_releasetime()) break; // 非0出招者只放一个技能
+                                    if (!WG.is_zero_releasetime()) break; // 非0出招者等待释放结束后再放下一招
                                     await WG.sleep(20);
                                     if (!WG.is_free()) break;
 
@@ -3696,7 +3706,8 @@
             else {
                 G.preform_timer = setInterval(() => {
 
-                    if (G.in_fight == false) WG.auto_preform("stop");
+                    if (G.in_fight == false) { WG.auto_preform("stop"); return; }
+                    if (typeof WG.processAutoFirstRound == "function" && WG.processAutoFirstRound()) return;
                     for (var skill of G.skills) {
 
                         if (WG.inArray(skill.id, blackpfm)) {

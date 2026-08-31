@@ -4,57 +4,40 @@ import { test } from "node:test";
 
 const require = createRequire(import.meta.url);
 const {
-  shouldPrepareTravelEquipment,
-  runAfterOptionalTravelEquipment,
+  normalizeLoadoutGroup,
+  runAfterConfiguredLoadout,
 } = require("./travel-equipment-option.js");
 
-test("travel equipment stays on when the flag is missing", () => {
-  assert.equal(shouldPrepareTravelEquipment(), true);
-  assert.equal(shouldPrepareTravelEquipment({}), true);
-  assert.equal(
-    shouldPrepareTravelEquipment({ smartEquipmentOnTravel: true }),
-    true,
-  );
+test("only the three native loadout groups are accepted", () => {
+  assert.equal(normalizeLoadoutGroup(0), 0);
+  assert.equal(normalizeLoadoutGroup("1"), 1);
+  assert.equal(normalizeLoadoutGroup(2), 2);
+  assert.equal(normalizeLoadoutGroup(""), null);
+  assert.equal(normalizeLoadoutGroup(-1), null);
+  assert.equal(normalizeLoadoutGroup(3), null);
 });
 
-test("travel equipment can be turned off without changing other flags", () => {
-  assert.equal(
-    shouldPrepareTravelEquipment({
-      mapAutoRoute: true,
-      smartEquipmentOnTravel: false,
-    }),
-    false,
-  );
-});
-
-test("disabled travel equipment skips prepare and still runs the original action", () => {
+test("an action without a loadout runs immediately", () => {
   const calls = [];
-  const prepared = runAfterOptionalTravelEquipment(
-    false,
-    function (done) {
-      calls.push("prepare");
-      done();
-    },
-    function () {
-      calls.push("travel");
-    },
+  const prepared = runAfterConfiguredLoadout(
+    null,
+    () => calls.push("switch"),
+    () => calls.push("action"),
   );
   assert.equal(prepared, false);
-  assert.deepEqual(calls, ["travel"]);
+  assert.deepEqual(calls, ["action"]);
 });
 
-test("enabled travel equipment prepares first then continues", () => {
+test("a configured action switches its group before continuing", () => {
   const calls = [];
-  const prepared = runAfterOptionalTravelEquipment(
-    true,
-    function (done) {
-      calls.push("prepare");
+  const prepared = runAfterConfiguredLoadout(
+    2,
+    (group, done) => {
+      calls.push("eqgroup " + group);
       done();
     },
-    function () {
-      calls.push("travel");
-    },
+    () => calls.push("action"),
   );
   assert.equal(prepared, true);
-  assert.deepEqual(calls, ["prepare", "travel"]);
+  assert.deepEqual(calls, ["eqgroup 2", "action"]);
 });

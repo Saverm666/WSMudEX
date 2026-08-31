@@ -179,7 +179,10 @@
             $(".WG_plugin_settings").prop("hidden")
           )
             return;
-          WG.renderAutoPerformSkillSettings();
+          if (typeof WG.renderNativeAutoPerformConfig === "function")
+            WG.renderNativeAutoPerformConfig();
+          else if (typeof WG.renderAutoPerformSkillSettings === "function")
+            WG.renderAutoPerformSkillSettings();
         }
         typeof WG.add_hook === "function" &&
           WG.add_hook("perform", refreshSettingsOnPerform);

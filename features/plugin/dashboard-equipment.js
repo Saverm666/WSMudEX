@@ -134,6 +134,28 @@
         WG.saveDashboardSnapshot();
         WG.updateSideDashboard();
       },
+      dashboardEquipmentBatchPending: false,
+      dashboardEquipmentBatchTimer: null,
+      beginDashboardEquipmentBatch: function () {
+        WG.dashboardEquipmentBatchPending = true;
+        clearTimeout(WG.dashboardEquipmentBatchTimer);
+        WG.dashboardEquipmentBatchTimer = setTimeout(function () {
+          WG.dashboardEquipmentBatchTimer = null;
+          WG.dashboardEquipmentBatchPending = false;
+          WG.updateDashboardEquipment();
+        }, 2000);
+      },
+      finishDashboardEquipmentBatch: function () {
+        if (!WG.dashboardEquipmentBatchPending) return;
+        clearTimeout(WG.dashboardEquipmentBatchTimer);
+        WG.dashboardEquipmentBatchTimer = null;
+        WG.dashboardEquipmentBatchPending = false;
+        WG.updateDashboardEquipment();
+      },
+      syncDashboardEquipmentLegacyState: function () {
+        if (!WG.equipmentPickerEquipment.length) return;
+        G.eqs = WG.equipmentPickerEquipment.slice();
+      },
       requestDashboardSnapshot: function () {
         if (WG.dashboardScoreRequestPending) return;
         WG.dashboardScoreRequestPending = true;
@@ -217,6 +239,7 @@
         var normalized = source.trim().toLowerCase();
         if (!normalized) return;
         if (/^(?:eq|uneq|eqgroup)\b/.test(normalized)) {
+          /^eqgroup\b/.test(normalized) && WG.beginDashboardEquipmentBatch();
           WG.scheduleDashboardStateRefresh({ pack: true, delay: 350 });
           return;
         }
@@ -538,7 +561,15 @@
           return;
         }
         if (event.type != "dialog" || event.dialog != "pack") return;
-        event.eq_group != null && WG.updateQuickLoadoutState(event.eq_group);
+        if (event.eq_group != null) {
+          WG.updateQuickLoadoutState(event.eq_group);
+          if (
+            typeof $ === "function" &&
+            !$(".WG_plugin_settings").prop("hidden") &&
+            typeof WG.renderNativeAutoPerformConfig === "function"
+          )
+            WG.renderNativeAutoPerformConfig();
+        }
         if (event.items) {
           // 完整后台快照使用的是插件对象格式，不能写回原生紧凑数组缓存。
           // 旧缓存若存在则必须失效，确保用户下次打开背包发送完整 pack。
@@ -553,7 +584,7 @@
           var data = WG.deserializePackData(structuredClone(event));
           WG.equipmentPickerItems = data.items || [];
           WG.equipmentPickerEquipment = data.eqs || [];
-          G.eqs = WG.equipmentPickerEquipment;
+          WG.syncDashboardEquipmentLegacyState();
           for (var index = 0; index < (data.eqs || []).length; index++) {
             var equippedItem = data.eqs[index];
             equippedItem &&
@@ -572,7 +603,7 @@
                     return item && item.id == event.id;
                   }) || { id: event.id, name: "" };
           WG.equipmentPickerEquipment[event.eq] = equippedItem;
-          G.eqs = WG.equipmentPickerEquipment;
+          WG.syncDashboardEquipmentLegacyState();
           WG.scheduleDashboardStateRefresh({ pack: true, delay: 350 });
         } else if (event.uneq != null) {
           var unequippedItem = WG.equipmentPickerEquipment[event.uneq];
@@ -582,10 +613,11 @@
             WG.equipmentPickerItems.push(unequippedItem);
           }
           WG.equipmentPickerEquipment[event.uneq] = null;
-          G.eqs = WG.equipmentPickerEquipment;
+          WG.syncDashboardEquipmentLegacyState();
           WG.scheduleDashboardStateRefresh({ pack: true, delay: 350 });
         }
-        WG.updateDashboardEquipment();
+        if (event.eq_group != null) WG.finishDashboardEquipmentBatch();
+        else if (!WG.dashboardEquipmentBatchPending) WG.updateDashboardEquipment();
       },
       sortEquipmentPickerItems: function (items, quickIds) {
         return (items || []).slice().sort(function (first, second) {
@@ -850,6 +882,12 @@
       dashboardEquipmentSignature: null,
       updateQuickLoadoutState: function (equipmentGroup) {
         var normalizedGroup = Number(equipmentGroup);
+        if (
+          Number.isInteger(normalizedGroup) &&
+          normalizedGroup >= 0 &&
+          normalizedGroup < 3
+        )
+          WG.currentEquipmentGroup = normalizedGroup;
         $(".WG_quick_loadout").each(function () {
           var selected = Number($(this).attr("data-equipment-group")) === normalizedGroup;
           $(this)
@@ -916,6 +954,7 @@
       },
       updateSideDashboard: function () {
         if (!$(".WG_side_rail_left").length) return;
+        WG.syncDashboardEquipmentLegacyState();
         WG.applyQuickLoadoutNames();
         var score = G.score || {},
           player = G.items && G.id ? G.items.get(G.id) || {} : {},
@@ -1002,7 +1041,9 @@
       },
       updateNativeAutoAttackActionState: function () {
         var enabled = Boolean(G.auto_preform),
-          buttons = $(".room-commands > .act-item").filter(function () {
+          candidates = $(".room-commands > .act-item");
+        if (!candidates || typeof candidates.filter !== "function") return;
+        var buttons = candidates.filter(function () {
             return (
               String($(this).attr("cmd") || "")
                 .trim()
@@ -1016,6 +1057,134 @@
             "aria-label": "自动攻击（" + (enabled ? "已开启" : "已关闭") + "）",
             title: "自动攻击：" + (enabled ? "已开启" : "已关闭"),
           });
+      },
+      syncAutoAttackUiState: function () {
+        var enabled = Boolean(G.auto_preform),
+          settingsToggle = $(".WG_plugin_auto_toggle");
+        settingsToggle &&
+          typeof settingsToggle.attr === "function" &&
+          settingsToggle.attr("aria-checked", String(enabled));
+        !enabled &&
+          typeof WG.cancelAutoFirstRound === "function" &&
+          WG.cancelAutoFirstRound();
+        WG.updateNativeAutoAttackActionState();
+      },
+      reportAutoAttackState: function (enabled) {
+        if (
+          typeof WG.isPluginFeatureEnabled === "function" &&
+          !WG.isPluginFeatureEnabled("autoAttackTeamMsg")
+        )
+          return;
+        var dialog = typeof Dialog !== "undefined" ? Dialog : null,
+          process = typeof Process !== "undefined" ? Process : null,
+          channel = dialog && dialog.channel,
+          message =
+            "自动攻击 " + (enabled ? "已开启" : "已关闭"),
+          data = {
+            ch: "tm",
+            name:
+              (G && G.name) ||
+              (legacy && legacy.getRoleName && legacy.getRoleName()) ||
+              "插件",
+            uid:
+              G && G.id != null
+                ? G.id
+                : legacy && legacy.getRoleId
+                  ? legacy.getRoleId()
+                  : null,
+            content: message,
+          };
+        if (
+          !channel ||
+          !process ||
+          !process.channel ||
+          typeof channel.createElement !== "function"
+        )
+          return;
+        var rendered = channel.createElement(data, false);
+        rendered && process.channel.push(rendered);
+        process.channel.scroll2end && process.channel.scroll2end();
+      },
+      auto_preform_switch: function () {
+        G.auto_preform
+          ? ((G.auto_preform = !1),
+            WG.reportAutoAttackState(false),
+            WG.auto_preform("stop"))
+          : ((G.auto_preform = !0),
+            WG.reportAutoAttackState(true),
+            WG.auto_preform());
+        WG.syncAutoAttackUiState();
+      },
+      installAutoAttackStateSync: function () {
+        if (WG.autoAttackStateSyncInstalled) return;
+        WG.autoAttackStateSyncInstalled = true;
+        var descriptor = Object.getOwnPropertyDescriptor(G, "auto_preform");
+        if (!descriptor || descriptor.configurable !== false) {
+          var currentValue = G.auto_preform;
+          WG.autoAttackStateOriginalDescriptor = descriptor || null;
+          Object.defineProperty(G, "auto_preform", {
+            configurable: true,
+            enumerable: descriptor ? descriptor.enumerable !== false : true,
+            get: function () {
+              return currentValue;
+            },
+            set: function (value) {
+              currentValue = value;
+              WG.syncAutoAttackUiState();
+            },
+          });
+        }
+        var root = document.documentElement || document.body;
+        if (root && typeof MutationObserver === "function") {
+          WG.autoAttackActionObserver = new MutationObserver(function (
+            mutations,
+          ) {
+            for (var mutation of mutations) {
+              var target = $(mutation.target);
+              if (
+                target.is(".room-commands") ||
+                target.closest(".room-commands").length
+              ) {
+                WG.syncAutoAttackUiState();
+                return;
+              }
+              for (var node of mutation.addedNodes || []) {
+                if (
+                  node.nodeType === 1 &&
+                  ($(node).is(".room-commands, .room-commands .act-item") ||
+                    $(node).find(".room-commands, .room-commands .act-item")
+                      .length)
+                ) {
+                  WG.syncAutoAttackUiState();
+                  return;
+                }
+              }
+            }
+          });
+          WG.autoAttackActionObserver.observe(root, {
+            childList: true,
+            subtree: true,
+          });
+        }
+        WG.syncAutoAttackUiState();
+      },
+      destroyAutoAttackStateSync: function () {
+        WG.autoAttackActionObserver && WG.autoAttackActionObserver.disconnect();
+        WG.autoAttackActionObserver = null;
+        if (WG.autoAttackStateOriginalDescriptor !== undefined) {
+          var currentValue = G.auto_preform,
+            original = WG.autoAttackStateOriginalDescriptor;
+          if (original) {
+            if (Object.prototype.hasOwnProperty.call(original, "value"))
+              original.value = currentValue;
+            Object.defineProperty(G, "auto_preform", original);
+          } else {
+            delete G.auto_preform;
+            G.auto_preform = currentValue;
+          }
+        }
+        delete WG.autoAttackStateOriginalDescriptor;
+        WG.autoAttackStateSyncInstalled = false;
       },
       smartEquipmentDetailPending: {},
       smartEquipmentPreparationToken: 0,
@@ -1731,28 +1900,45 @@
           });
       },
       runNativeExtensionAction: function (action) {
-        switch (action) {
-          case "home":
-            return WG.go_home();
-          case "master":
-            return WG.go_master();
-          case "wumiao":
-            return WG.go_wumiao();
-          case "cleanup":
-            return WG.sell_all();
-          case "work":
-            return WG.zdwk();
-          case "yamen":
-            return WG.go_yamen_task();
-          case "resonance":
-          case "team":
-            return WG.team_resonance();
-          case "auto":
-            return WG.auto_preform_switch();
-          default:
-            messageAppend("<hir>未知的原生扩展动作：" + action + "</hir>");
-        }
+        var run = function () {
+          switch (action) {
+            case "home":
+              return WG.go_home();
+            case "master":
+              return WG.go_master();
+            case "wumiao":
+              return WG.go_wumiao();
+            case "cleanup":
+              return WG.sell_all();
+            case "work":
+              return WG.zdwk();
+            case "yamen":
+              return WG.go_yamen_teleport_task();
+            case "resonance":
+            case "team":
+              return WG.team_resonance();
+            case "auto":
+              return WG.auto_preform_switch();
+            default:
+              messageAppend("<hir>未知的原生扩展动作：" + action + "</hir>");
+          }
+        };
+        if (["home", "master", "wumiao", "yamen"].includes(action))
+          return run();
+        if (typeof WG.runAfterBuiltinActionLoadout === "function")
+          return WG.runAfterBuiltinActionLoadout(
+            action === "team" ? "resonance" : action,
+            run,
+          );
+        return run();
       },
     });
+    WG.installAutoAttackStateSync();
+
+    return {
+      destroy: function () {
+        WG.destroyAutoAttackStateSync();
+      },
+    };
   });
 })(window);

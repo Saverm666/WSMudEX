@@ -348,9 +348,9 @@
         ((s = T.recmd(e, s)),
           G.auto_preform &&
             ((G.auto_preform = !1),
-            messageAppend("<hio>自动施法</hio>关闭"),
+            WG.reportAutoAttackState(false),
             WG.auto_preform("stop")),
-          WG.updateNativeAutoAttackActionState(),
+          WG.syncAutoAttackUiState(),
           await WG.sleep(100),
           WG.SendCmd(s));
       },
@@ -358,9 +358,9 @@
         ((s = T.recmd(e, s)),
           G.auto_preform ||
             ((G.auto_preform = !0),
-            messageAppend("<hio>自动施法</hio>开启"),
+            WG.reportAutoAttackState(true),
             WG.auto_preform()),
-          WG.updateNativeAutoAttackActionState(),
+          WG.syncAutoAttackUiState(),
           await WG.sleep(100),
           WG.SendCmd(s));
       },

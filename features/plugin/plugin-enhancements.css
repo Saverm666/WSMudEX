@@ -1230,6 +1230,12 @@ body.WG_resizing_rails * {
         linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
         #070707;
     background-size: 2rem 2rem;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.WG_map_modal.WG_map_panning .WG_map_modal_viewport {
+    cursor: grabbing;
 }
 .WG_map_modal .map-panel {
     width: 100%;
@@ -1264,6 +1270,10 @@ body.WG_resizing_rails * {
 }
 .WG_map_modal .map-room-label {
     user-select: none;
+}
+html.WG_feature_floatingToolbar_off .WG_floating_toggle,
+html.WG_feature_floatingToolbar_off .WG_floating_panel {
+    display: none !important;
 }
 body.WG_map_modal_open {
     overflow: hidden;
@@ -1635,10 +1645,46 @@ body.WG_map_modal_open {
 .WG_plugin_settings_body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
     gap: 1em;
     min-height: 0;
     padding: 1em;
     overflow: auto;
+}
+.WG_plugin_settings_body[hidden],
+.WG_plugin_settings_dialog > .WG_plugin_settings_footer[hidden] {
+    display: none;
+}
+.WG_plugin_settings_column {
+    display: grid;
+    align-content: start;
+    gap: 1em;
+    min-width: 0;
+}
+.WG_plugin_settings_subpage[hidden] {
+    display: none;
+}
+.WG_plugin_settings_subpage {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+}
+.WG_plugin_settings_subpage_header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 3em;
+    border-bottom: 1px solid #343434;
+    background: #181818;
+}
+.WG_plugin_settings_subpage_body {
+    min-height: 0;
+    padding: 1em;
+    overflow: auto;
+}
+.WG_plugin_settings_subpage_header .WG_plugin_settings_title {
+    padding-left: 0.35em;
 }
 .WG_plugin_settings_section {
     min-width: 0;
@@ -1652,24 +1698,129 @@ body.WG_map_modal_open {
 .WG_plugin_settings_section_desc {
     margin: -0.25em 0 0.45em;
 }
-.WG_plugin_settings_group + .WG_plugin_settings_group {
-    margin-top: 0.7em;
-}
 .WG_plugin_settings_group_title {
     margin-bottom: 0.25em;
     color: #727980;
     font-size: 0.78em;
 }
-.WG_plugin_settings_auto_skills {
-    max-height: 16em;
+.WG_plugin_auto_config_columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.8em;
+}
+.WG_plugin_auto_config_column {
+    min-width: 0;
+}
+.WG_plugin_auto_order,
+.WG_plugin_auto_blacklist {
+    max-height: 15em;
     overflow: auto;
     scrollbar-gutter: stable;
+}
+.WG_plugin_auto_order_item {
+    display: grid;
+    grid-template-columns: 1.25em 1.5em minmax(0, 1fr);
+    align-items: center;
+    gap: 0.35em;
+    min-height: 2.15em;
+    border-bottom: 1px solid #20252b;
+    cursor: grab;
+    touch-action: pan-y;
+    user-select: none;
+}
+.WG_plugin_auto_order_item.is-dragging {
+    opacity: 0.55;
+    cursor: grabbing;
+}
+.WG_plugin_auto_order_handle {
+    color: #858a8f;
+    cursor: grab;
+    text-align: center;
+    touch-action: none;
+}
+.WG_plugin_auto_order_handle:focus-visible {
+    border-radius: 0.15em;
+    color: #e0e0e0;
+    outline: 1px solid #858a8f;
+    outline-offset: 2px;
+}
+.WG_plugin_auto_order.is-sorting {
+    cursor: grabbing;
+}
+.WG_plugin_auto_order_index {
+    color: #727980;
+    text-align: right;
+}
+.WG_plugin_auto_order_name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.WG_plugin_auto_save {
+    margin-top: 0.7em;
 }
 .WG_plugin_settings_empty {
     padding: 0.55em 0;
     color: #727980;
     font-size: 0.78em;
     line-height: 1.4;
+}
+.WG_plugin_loadout_rules_body {
+    display: block;
+}
+.WG_plugin_loadout_rule_section {
+    width: min(54em, 100%);
+    min-width: 0;
+    margin: 0 auto;
+    padding: 0.9em 1em;
+    border: 1px solid #2b3035;
+    border-radius: 0.3em;
+    background: #0c0e10;
+}
+.WG_plugin_loadout_rule {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(18em, 48%);
+    align-items: center;
+    gap: 1.25em;
+    min-height: 3.8em;
+    border-bottom: 1px solid #20252b;
+}
+.WG_plugin_loadout_rule:last-child {
+    border-bottom: 0;
+}
+.WG_plugin_loadout_rule_copy {
+    min-width: 0;
+}
+.WG_plugin_loadout_rule_command {
+    display: block;
+    margin-top: 0.15em;
+    overflow: hidden;
+    color: #686f76;
+    font-family: "Noto Sans Mono CJK SC", "Sarasa Mono SC", monospace;
+    font-size: 0.7em;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.WG_plugin_loadout_rule_select {
+    width: 100%;
+    min-width: 0;
+    height: 2.65em;
+    padding: 0 2.2em 0 0.75em;
+    border: 1px solid #4c535a;
+    border-radius: 0.25em;
+    color: #c7cbd0;
+    background: #111417;
+    font: inherit;
+    font-size: 1.08em;
+    cursor: pointer;
+}
+.WG_plugin_loadout_rule_select:hover,
+.WG_plugin_loadout_rule_select:focus-visible {
+    border-color: #858a8f;
+    outline: none;
+    background: #181c20;
 }
 .WG_plugin_settings_row {
     display: grid;
@@ -1773,6 +1924,14 @@ body.WG_map_modal_open {
     }
     .WG_plugin_settings_body {
         grid-template-columns: 1fr;
+    }
+    .WG_plugin_auto_config_columns {
+        grid-template-columns: 1fr;
+    }
+    .WG_plugin_loadout_rule {
+        grid-template-columns: 1fr;
+        gap: 0.4em;
+        padding: 0.55em 0;
     }
 }
 .WG_auto_first_round[hidden] {
@@ -1997,14 +2156,14 @@ body.WG_map_modal_open {
     right: 18px;
     bottom: 18px;
     z-index: 2147482999;
-    height: 44px;
-    padding: 0 18px;
+    height: 34px;
+    padding: 0 12px;
     border: 1px solid #5f6670;
-    border-radius: 22px;
+    border-radius: 17px;
     background: rgba(20, 22, 26, 0.96);
     color: #e8eaed;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    font: 600 15px/42px "Microsoft YaHei", sans-serif;
+    font: 600 13px/32px "Microsoft YaHei", sans-serif;
     cursor: grab;
     touch-action: none;
     user-select: none;

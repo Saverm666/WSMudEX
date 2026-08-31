@@ -5,6 +5,19 @@ function ContainerCommand(_0x4df99f) {
     _0x21830e = _0x3c348a.parent().attr("cmd");
   }
   if (_0x21830e) {
+    var actionBarItem = _0x3c348a.closest(".room-commands > .act-item");
+    if (
+      !_0x4df99f.WGLoadoutBypass &&
+      actionBarItem.length &&
+      typeof window.WGRunActionBarCommandWithLoadout === "function" &&
+      window.WGRunActionBarCommandWithLoadout(_0x21830e, function () {
+        ContainerCommand({
+          target: actionBarItem[0],
+          WGLoadoutBypass: true,
+        });
+      })
+    )
+      return false;
     var isItemPopupCommand =
         _0x3c348a.closest(".WG_item_popup").length > 0,
       isSidePanelMenuCommand = /^#menu\s+showchat(?:\s|$)/.test(_0x21830e),

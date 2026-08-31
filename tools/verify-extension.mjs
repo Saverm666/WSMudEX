@@ -1758,9 +1758,9 @@ assert(
     ) &&
     pendingDetailSource.includes("Process.queueDetailPopupRequest(pending)") &&
     pendingDetailSource.includes(
-      '".WG_item_popup_secondary, .dialog.WG_floating_dialog"',
+      '".WG_item_popup_secondary, .dialog"',
     ),
-  "详情请求未保存来源悬浮层，无法创建独立次级悬浮窗",
+  "详情请求未保存来源对话框，无法创建独立次级悬浮窗",
 );
 const detailProcessDialogSource = gameClientSource.match(
   /dialog: function \(_0x4ce96c\) \{[\s\S]*?\n  },\n  isDialogPanelPayload:/,
@@ -1785,11 +1785,11 @@ const showPendingDetailPopupSource = gameClientSource.match(
 )?.[0];
 assert(
   showPendingDetailPopupSource?.includes(
-    'parentNative.hasClass("WG_floating_dialog")',
+    'parentNative.hasClass("dialog")',
   ) &&
     showPendingDetailPopupSource.includes('attr("data-dialog-depth")') &&
     showPendingDetailPopupSource.includes("var depth = parentDepth + 1"),
-  "通用悬浮面板打开详情时未提升子窗层级",
+  "师父等对话框打开详情时未提升子窗层级",
 );
 for (const mapModalContract of [
   "EnsureModal",
@@ -4189,6 +4189,18 @@ const commandEngineSource = readFileSync(
   join(extensionRoot, "features/plugin/command-engine.js"),
   "utf8",
 );
+const combatAutomationSource = readFileSync(
+  join(extensionRoot, "features/plugin/combat-automation.js"),
+  "utf8",
+);
+const dashboardEquipmentSource = readFileSync(
+  join(extensionRoot, "features/plugin/dashboard-equipment.js"),
+  "utf8",
+);
+const upstreamAutomationSource = readFileSync(
+  join(extensionRoot, "features/upstream-automation.js"),
+  "utf8",
+);
 for (const directCommandLegacyAccess of [
   "for (let e = 0; e < roomData.length",
   "for (o of packData)",
@@ -4214,6 +4226,10 @@ assert(
 );
 const pluginSettingsSource =
   automationSource;
+const pluginSettingsModuleSource = readFileSync(
+  join(extensionRoot, "features/plugin/plugin-settings.js"),
+  "utf8",
+);
 for (const pluginModuleContract of [
   "registerFeature",
   "installFeatures",
@@ -9046,8 +9062,42 @@ pluginModuleG.selfStatus = ["busy"];
 assert(
   pluginModuleWG.is_free() === false &&
     typeof pluginModuleWG.auto_preform === "function" &&
-    typeof pluginModuleWG.auto_preform_switch === "function",
+    typeof pluginModuleWG.auto_preform_switch === "function" &&
+    typeof pluginModuleWG.reportAutoAttackState === "function",
   "自动战斗模块未保持忙碌状态判定或施法入口",
+);
+assert(
+  combatAutomationSource.includes('ch: "tm"') &&
+    combatAutomationSource.includes('content: message') &&
+    combatAutomationSource.includes("channel.createElement(data, false)") &&
+    !combatAutomationSource.includes('"tm 自动攻击 "') &&
+    !combatAutomationSource.includes("receiveMessage(message)") &&
+    dashboardEquipmentSource.includes("reportAutoAttackState: function") &&
+    dashboardEquipmentSource.includes("auto_preform_switch: function") &&
+    dashboardEquipmentSource.includes('ch: "tm"') &&
+    dashboardEquipmentSource.includes("channel.createElement(data, false)") &&
+    dashboardEquipmentSource.includes("WG.reportAutoAttackState(false)") &&
+    dashboardEquipmentSource.includes("WG.reportAutoAttackState(true)") &&
+    dashboardEquipmentSource.includes('isPluginFeatureEnabled("autoAttackTeamMsg")') &&
+    pluginSettingsModuleSource.includes('id: "autoAttackTeamMsg"') &&
+    pluginSettingsModuleSource.includes("name: \"队伍频段提示\"") &&
+    !upstreamAutomationSource.includes("receiveMessage: typeof ReceiveMessage") &&
+    commandEngineSource.includes("WG.reportAutoAttackState(false)") &&
+    commandEngineSource.includes("WG.reportAutoAttackState(true)"),
+  "自动攻击开关未统一向中间下部信息栏输出开启/关闭状态",
+);
+assert(
+  upstreamAutomationSource.includes(
+    'typeof WG.prepareAutoFirstRound == "function"',
+  ) &&
+    upstreamAutomationSource.includes(
+      'typeof WG.processAutoFirstRound == "function" && WG.processAutoFirstRound()',
+    ) &&
+    upstreamAutomationSource.includes(
+      'if (!WG.is_zero_releasetime()) break; // 非0出招者等待释放结束后再放下一招',
+    ) &&
+    upstreamAutomationSource.includes('.match(/(-?\\d+(?:\\.\\d+)?)\\s*秒/)'),
+  "实际加载的上游自动施法未接入首轮队列或仍会忽略非零出招时间连续发送",
 );
 assert(
   typeof pluginModuleWG.calc === "function" &&
@@ -9237,6 +9287,9 @@ for (const sideDashboardContract of [
   "WG_quick_loadout",
   'data-equipment-group="0"',
   '.off("click.WG_quick_loadout")',
+  "beginDashboardEquipmentBatch",
+  "finishDashboardEquipmentBatch",
+  "syncDashboardEquipmentLegacyState",
   'WG.Send("eqgroup " + equipmentGroup)',
   "updateQuickLoadoutState",
   "event.eq_group != null",
@@ -9319,10 +9372,6 @@ for (const sideDashboardContract of [
   "requestBestPotentialWork",
   "startPotentialWork",
   "startPreparedPotentialWork",
-  "preparePotentialWorkEquipment",
-  "potentialWorkEquipmentPreparationToken",
-  "/铁镐|移山镐/",
-  "/药王神篇|神农百草经/",
   "startFishingPotentialWork",
   'Promise.resolve(WG.go("扬州城-江边"))',
   "stopPotentialWorkAutoCheck",
@@ -9364,26 +9413,15 @@ for (const sideDashboardContract of [
   'controls.children(".WG_chat_drawer_toggle").remove()',
   "runNativeExtensionAction",
   "WGRunNativeExtensionAction",
-  "prepareSmartEquipment",
-  "chooseSmartEquipment",
-  "parseSmartEquipmentDetail",
-  "requestSmartEquipmentSnapshot",
-  "smartEquipmentPreparationToken",
-  "smartEquipmentDetailRequestConcurrency: 6",
-  "smartEquipmentDetailRequestTimeout: 1800",
-  "smartEquipmentDetailBatchDeadline: 5000",
-  "smartEquipmentDetailCacheSaveTimers: {}",
-  "_WG_smart_equipment_details_v1",
-  "getCachedSmartEquipmentDetail",
-  "pruneSmartEquipmentDetailCache",
-  "smartEquipmentSelectionCacheVersion: 1",
-  "buildSmartEquipmentSelectionFingerprint",
-  "restoreSmartEquipmentSelection",
-  "rememberSmartEquipmentSelection",
-  'WG.prepareSmartEquipment("study"',
-  'WG.prepareSmartEquipment("intelligence"',
-  "runAfterOptionalTravelEquipment",
-  "smartEquipmentOnTravel",
+  "actionLoadoutVersion",
+  "builtinActionDefinitions",
+  "getActionLoadoutConfig",
+  "setActionLoadout",
+  "switchToActionLoadout",
+  "runAfterBuiltinActionLoadout",
+  "runActionBarCommandWithLoadout",
+  "WGRunActionBarCommandWithLoadout",
+  'WG.Send("eqgroup " + group)',
   'case "home"',
   'case "master"',
   'case "wumiao"',
@@ -9402,6 +9440,10 @@ for (const sideDashboardContract of [
   "WG.auto_preform_switch()",
   "WG_plugin_auto_toggle",
   "updateNativeAutoAttackActionState",
+  "syncAutoAttackUiState",
+  "installAutoAttackStateSync",
+  'Object.defineProperty(G, "auto_preform"',
+  "autoAttackActionObserver",
   "WG_native_auto_active",
   "color: black !important",
   "background-color: gray !important",
@@ -9520,22 +9562,84 @@ for (const pluginSettingsContract of [
   "horizontalMenu",
   "chatDrawer",
   "equipmentPicker",
-  "smartEquipmentOnTravel",
   "floatingPanels",
   "characterPopup",
   "mapAutoRoute",
   "WG_plugin_settings_auto",
+  "WG_plugin_settings_subpage",
   "WG_plugin_auto_toggle",
-  "WG_plugin_settings_auto_first_round",
+  "WG_plugin_auto_order",
+  "WG_plugin_auto_order_item",
+  "WG_plugin_auto_blacklist",
+  "WG_plugin_auto_save",
+  "renderNativeAutoPerformConfig",
+  "saveNativeAutoPerformSettings",
+  "openPluginAutoPerformPage",
+  "closePluginAutoPerformPage",
+  "beginPluginAutoPerformDrag",
+  "movePluginAutoPerformDrag",
+  "endPluginAutoPerformDrag",
+  "keyPluginAutoPerformDrag",
+  "syncPluginAutoPerformDragOrder",
+  "getPluginAutoPerformSkills",
+  "parsePluginAutoPerformIds",
+  "nativeAutoSkill",
+  "出招顺序",
+  "出招黑名单",
   'kind: "auto"',
   "WG.auto_preform_switch()",
-  "WG.openAutoFirstRoundDialog(this)",
+  "WG.saveAutoFirstRoundConfig(normalizedOrder)",
+  'WG.Send("setting auto_pfm none")',
+  'auto_pfm',
+  'unauto_pfm',
+  "WG_plugin_loadout_rules_page",
+  "WG_plugin_loadout_rule_select",
+  "renderActionLoadoutRules",
+  "openActionLoadoutRulesPage",
+  "WG.setActionLoadout",
+  "listCurrentActionBarButtons",
+  "动作前配装",
+  "不换装",
 ]) {
   assert(
     pluginSettingsSource.includes(pluginSettingsContract),
     `插件设置入口缺少自动攻击管理或功能开关: ${pluginSettingsContract}`,
   );
 }
+assert(
+  !pluginSettingsModuleSource.includes('id: "smartEquipmentOnTravel"') &&
+    !automationSource.includes("runAfterOptionalTravelEquipment") &&
+    !automationSource.includes('WG.prepareSmartEquipment("study"') &&
+    !automationSource.includes('WG.prepareSmartEquipment("intelligence"') &&
+    !automationSource.includes("WG.preparePotentialWorkEquipment(work"),
+  "旧传送前智能计算换装仍被设置页或动作流程调用",
+);
+assert(
+  gameClientSource.includes("WGRunActionBarCommandWithLoadout") &&
+    gameClientSource.includes("WGLoadoutBypass") &&
+    pluginEnhancementStyles.includes(".WG_plugin_loadout_rule_select") &&
+    pluginEnhancementStyles.includes(".WG_plugin_loadout_rules_body"),
+  "动作栏按钮未接入执行前配装拦截或配置页缺少布局样式",
+);
+assert(
+  !pluginSettingsModuleSource.includes("WG_plugin_builtin_loadout_rules") &&
+    pluginSettingsModuleSource.includes("当前动作栏") &&
+    pluginSettingsModuleSource.includes("buttons = WG.rememberActionBarButtons()") &&
+    pluginEnhancementStyles.includes("minmax(18em, 48%)") &&
+    pluginEnhancementStyles.includes("font-size: 1.08em"),
+  "动作前配装页未限制为当前动作栏单列，或配装选择框仍过窄",
+);
+assert(
+  pluginEnhancementStyles.includes(".WG_plugin_settings_body") &&
+    pluginEnhancementStyles.includes("align-items: start"),
+  "插件设置双栏布局不得为自动攻击区域保留右栏高度空白",
+);
+assert(
+  !pluginSettingsModuleSource.includes("WG_plugin_settings_auto_skills") &&
+    !pluginSettingsModuleSource.includes("WG_plugin_settings_auto_first_round") &&
+    !pluginEnhancementStyles.includes(".WG_plugin_settings_auto_skills"),
+  "插件自动攻击页不得重复渲染出招顺序或出招黑名单控件",
+);
 const quickLoadoutPalette = pluginEnhancementStyles.match(
   /\.WG_quick_loadout:hover,[\s\S]*?\.WG_quick_loadout\[aria-pressed="true"\][\s\S]*?\n\}/,
 )?.[0];
@@ -9727,7 +9831,7 @@ const nativeAutoDollarCollection = (elements) => {
 const nativeAutoSandbox = { G: { auto_preform: true }, $: nativeAutoDollar, WG: {} };
 nativeAutoSandbox.WG.updateNativeAutoAttackActionState = readDashboardMethod(
   "updateNativeAutoAttackActionState",
-  "smartEquipmentDetailPending",
+  "syncAutoAttackUiState",
   nativeAutoSandbox,
 );
 nativeAutoSandbox.WG.updateNativeAutoAttackActionState();
@@ -10311,6 +10415,10 @@ const equipmentSyncSandbox = {
     },
     rememberEquipmentSlot() {},
     scanEquipmentPickerItems() {},
+    syncDashboardEquipmentLegacyState() {
+      this._legacyEquipmentSyncCount = (this._legacyEquipmentSyncCount || 0) + 1;
+      equipmentSyncSandbox.G.eqs = this.equipmentPickerEquipment.slice();
+    },
     updateDashboardEquipment() {},
     scheduleDashboardStateRefresh() {},
   },
@@ -10327,6 +10435,65 @@ assert(
     equipmentSyncSandbox.Dialog.pack.items === null &&
     equipmentSyncSandbox.Dialog.pack.eqs === null,
   "静默背包快照未同步左栏物品和装备缓存",
+);
+const isolatedEquipment = [{ id: "ring-a", name: "戒指 A" }];
+const equipmentIsolationSandbox = {
+  G: { eqs: isolatedEquipment },
+  WG: { equipmentPickerEquipment: isolatedEquipment },
+};
+equipmentIsolationSandbox.WG.syncDashboardEquipmentLegacyState =
+  readDashboardMethod(
+    "syncDashboardEquipmentLegacyState",
+    "requestDashboardSnapshot",
+    equipmentIsolationSandbox,
+  );
+equipmentIsolationSandbox.WG.syncDashboardEquipmentLegacyState();
+equipmentIsolationSandbox.G.eqs[0] = { id: "ring-a", name: "" };
+assert(
+  equipmentIsolationSandbox.G.eqs !==
+    equipmentIsolationSandbox.WG.equipmentPickerEquipment &&
+    equipmentIsolationSandbox.WG.equipmentPickerEquipment[0].name === "戒指 A",
+  "左栏装备状态不能与原生 G.eqs 共用可变数组引用",
+);
+const equipmentBatchTimers = [];
+let equipmentBatchRefreshes = 0;
+const equipmentBatchSandbox = {
+  WG: {
+    updateDashboardEquipment() {
+      equipmentBatchRefreshes += 1;
+    },
+  },
+  setTimeout(callback, delay) {
+    const timer = { callback, delay, cleared: false };
+    equipmentBatchTimers.push(timer);
+    return timer;
+  },
+  clearTimeout(timer) {
+    if (timer) timer.cleared = true;
+  },
+};
+equipmentBatchSandbox.WG.beginDashboardEquipmentBatch = readDashboardMethod(
+  "beginDashboardEquipmentBatch",
+  "finishDashboardEquipmentBatch",
+  equipmentBatchSandbox,
+);
+equipmentBatchSandbox.WG.finishDashboardEquipmentBatch = readDashboardMethod(
+  "finishDashboardEquipmentBatch",
+  "syncDashboardEquipmentLegacyState",
+  equipmentBatchSandbox,
+);
+equipmentBatchSandbox.WG.beginDashboardEquipmentBatch();
+assert(
+  equipmentBatchSandbox.WG.dashboardEquipmentBatchPending === true &&
+    equipmentBatchTimers[0].delay === 2000,
+  "快速配装批处理未建立有界等待状态",
+);
+equipmentBatchSandbox.WG.finishDashboardEquipmentBatch();
+assert(
+  equipmentBatchSandbox.WG.dashboardEquipmentBatchPending === false &&
+    equipmentBatchTimers[0].cleared === true &&
+    equipmentBatchRefreshes === 1,
+  "配装组完成事件未在批处理结束时只刷新一次左栏",
 );
 assert(
   !automationSource.includes("Dialog.pack.onData(structuredClone(event))"),
@@ -10356,6 +10523,7 @@ const firstRoundSandbox = {
   role: "测试角色",
   G: {
     id: "player-test",
+    auto_preform: true,
     in_fight: true,
     gcd: false,
     cds: new Map(),
@@ -10392,6 +10560,16 @@ firstRoundSandbox.WG.saveAutoFirstRoundConfig = readDashboardMethod(
 firstRoundSandbox.WG.processAutoFirstRound = readDashboardMethod(
   "processAutoFirstRound",
   null,
+  firstRoundSandbox,
+);
+firstRoundSandbox.WG.getAutoFirstRoundReleaseDelay = readDashboardMethod(
+  "getAutoFirstRoundReleaseDelay",
+  "prepareAutoFirstRound",
+  firstRoundSandbox,
+);
+firstRoundSandbox.WG.cancelAutoFirstRound = readDashboardMethod(
+  "cancelAutoFirstRound",
+  "getAutoFirstRoundReleaseDelay",
   firstRoundSandbox,
 );
 assert(
@@ -10431,6 +10609,7 @@ assert(
   "首轮出招配置未正确持久化",
 );
 const firstRoundCommands = [];
+firstRoundSandbox.G.score2 = { releasetime: "1.2秒" };
 firstRoundSandbox.WG.autoFirstRoundActive = true;
 firstRoundSandbox.WG.autoFirstRoundQueue = ["force.power", "sword.wu"];
 firstRoundSandbox.WG.autoFirstRoundIndex = 0;
@@ -10440,12 +10619,59 @@ firstRoundSandbox.WG.getAutoFirstRoundSkills = () => [
 ];
 firstRoundSandbox.WG.Send = (command) => firstRoundCommands.push(command);
 assert(firstRoundSandbox.WG.processAutoFirstRound(), "首轮第一招未被消费");
-assert(firstRoundSandbox.WG.processAutoFirstRound(), "首轮第二招未被消费");
+assert(
+  firstRoundSandbox.WG.processAutoFirstRound() &&
+    firstRoundCommands.length === 1 &&
+    firstRoundSandbox.WG.autoFirstRoundIndex === 1 &&
+    firstRoundSandbox.WG.autoFirstRoundReadyAt > Date.now(),
+  "首轮未等待上一招释放时间就连续发送下一招",
+);
+firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
+assert(firstRoundSandbox.WG.processAutoFirstRound(), "释放结束后未执行首轮第二招");
+firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
 assert(
   !firstRoundSandbox.WG.processAutoFirstRound() &&
     JSON.stringify(firstRoundCommands) ===
       JSON.stringify(["perform force.power", "perform sword.wu"]),
   "首轮未按配置顺序出招或结束后未让回普通调度",
+);
+firstRoundCommands.length = 0;
+firstRoundSandbox.G.auto_preform = true;
+firstRoundSandbox.G.score2.releasetime = "0秒";
+firstRoundSandbox.WG.autoFirstRoundActive = true;
+firstRoundSandbox.WG.autoFirstRoundQueue = [
+  "sword.wu",
+  "sword.poqi",
+  "dodge.tage",
+  "parry.wushen",
+];
+firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+firstRoundSandbox.WG.autoFirstRoundReadyAt = 0;
+firstRoundSandbox.WG.getAutoFirstRoundSkills = () => [
+  { id: "sword.wu" },
+  { id: "sword.poqi" },
+  { id: "dodge.tage" },
+  { id: "parry.wushen" },
+];
+for (let index = 0; index < 4; index += 1) {
+  assert(firstRoundSandbox.WG.processAutoFirstRound(), "指定四招队列提前结束");
+  firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
+}
+assert(
+  firstRoundCommands.join("|") ===
+    "perform sword.wu|perform sword.poqi|perform dodge.tage|perform parry.wushen",
+  "无招、破气、踏歌、五神未保持用户配置顺序",
+);
+firstRoundSandbox.WG.autoFirstRoundActive = true;
+firstRoundSandbox.WG.autoFirstRoundQueue = ["force.power"];
+firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+firstRoundSandbox.G.auto_preform = false;
+assert(
+  !firstRoundSandbox.WG.processAutoFirstRound() &&
+    !firstRoundSandbox.WG.autoFirstRoundActive &&
+    firstRoundSandbox.WG.autoFirstRoundQueue.length === 0 &&
+    firstRoundSandbox.WG.autoFirstRoundIndex === 0,
+  "关闭自动攻击后未同步取消叫杀第一轮出招",
 );
 for (const firstRoundDragStyleContract of [
   ".WG_auto_first_round_drag_handle",

@@ -654,6 +654,19 @@ function ContainerCommand(_0x4df99f) {
     _0x21830e = _0x3c348a.parent().attr("cmd");
   }
   if (_0x21830e) {
+    var actionBarItem = _0x3c348a.closest(".room-commands > .act-item");
+    if (
+      !_0x4df99f.WGLoadoutBypass &&
+      actionBarItem.length &&
+      typeof window.WGRunActionBarCommandWithLoadout === "function" &&
+      window.WGRunActionBarCommandWithLoadout(_0x21830e, function () {
+        ContainerCommand({
+          target: actionBarItem[0],
+          WGLoadoutBypass: true,
+        });
+      })
+    )
+      return false;
     var isItemPopupCommand =
         _0x3c348a.closest(".WG_item_popup").length > 0,
       isSidePanelMenuCommand = /^#menu\s+showchat(?:\s|$)/.test(_0x21830e),
@@ -1300,7 +1313,7 @@ var Process = {
       sourcePopup = sourceElement.closest(".WG_item_popup").first(),
       sourceSecondary = sourceElement
         .closest(
-          ".WG_item_popup_secondary, .dialog.WG_floating_dialog",
+          ".WG_item_popup_secondary, .dialog",
         )
         .first(),
       sourceSurface = sourcePopup.length
@@ -1917,7 +1930,7 @@ var Process = {
     if (!parentPopup.length) parentPopup = source.closest(".WG_item_popup");
     if (!parentNative.length)
       parentNative = source.closest(
-        ".WG_item_popup_secondary, .dialog.WG_floating_dialog",
+        ".WG_item_popup_secondary, .dialog",
       );
     if (!parentSurface.length)
       parentSurface = parentPopup.length
@@ -1929,7 +1942,7 @@ var Process = {
     }
     var parentDepth = parentPopup.length
       ? Number(parentPopup.attr("data-popup-depth")) || 0
-      : parentNative.hasClass("WG_floating_dialog")
+      : parentNative.hasClass("dialog")
         ? (Number(parentNative.attr("data-dialog-depth")) || 0) + 1
         : Number(parentNative.attr("data-popup-depth")) || 1;
     var depth = parentDepth + 1;

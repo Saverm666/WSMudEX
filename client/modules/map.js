@@ -322,6 +322,57 @@ var MAP = {
         "</div>",
     ).appendTo($(".container").first());
     modal.find(".WG_map_modal_viewport").append($(".map-panel").first());
+    var panState = null;
+    modal.on(
+      "pointerdown.WG_map_pan",
+      ".WG_map_modal_viewport",
+      function (event) {
+        var pointerEvent = event.originalEvent;
+        if (pointerEvent.button != null && pointerEvent.button !== 0) return;
+        var panel = $(this).find(".map-panel")[0];
+        if (!panel) return;
+        panState = {
+          pointerId: pointerEvent.pointerId,
+          panel: panel,
+          startX: pointerEvent.clientX,
+          startY: pointerEvent.clientY,
+          scrollLeft: panel.scrollLeft,
+          scrollTop: panel.scrollTop,
+          dragged: false,
+        };
+        this.setPointerCapture && this.setPointerCapture(pointerEvent.pointerId);
+      },
+    );
+    modal.on(
+      "pointermove.WG_map_pan",
+      ".WG_map_modal_viewport",
+      function (event) {
+        var pointerEvent = event.originalEvent;
+        if (!panState || pointerEvent.pointerId !== panState.pointerId) return;
+        var deltaX = pointerEvent.clientX - panState.startX,
+          deltaY = pointerEvent.clientY - panState.startY;
+        if (!panState.dragged && Math.hypot(deltaX, deltaY) < 5) return;
+        panState.dragged = true;
+        modal.addClass("WG_map_panning");
+        panState.panel.scrollLeft = panState.scrollLeft - deltaX;
+        panState.panel.scrollTop = panState.scrollTop - deltaY;
+        event.preventDefault();
+      },
+    );
+    modal.on(
+      "pointerup.WG_map_pan pointercancel.WG_map_pan",
+      ".WG_map_modal_viewport",
+      function (event) {
+        var pointerEvent = event.originalEvent;
+        if (!panState || pointerEvent.pointerId !== panState.pointerId) return;
+        if (panState.dragged) {
+          // Let the following synthetic click finish without triggering a route.
+          modal.data("WG_map_suppress_route_click", true);
+        }
+        modal.removeClass("WG_map_panning");
+        panState = null;
+      },
+    );
     modal.on("click.WG_map_modal", function (event) {
       if (event.target === this) {
         MAP.CloseModal();
@@ -334,6 +385,12 @@ var MAP = {
       "click.WG_map_route",
       ".map-room, .map-room-label",
       function (event) {
+        if (modal.data("WG_map_suppress_route_click")) {
+          modal.removeData("WG_map_suppress_route_click");
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
         event.preventDefault();
         MAP.StartAutoRoute($(this).attr("data-room-id") || $(this).attr("rm"));
       },
@@ -1027,6 +1084,7 @@ var MAP = {
       $(document).off("keydown.WG_map_modal");
       $(".WG_map_modal")
         .off(".WG_map_modal")
+        .off(".WG_map_pan")
         .off(".WG_map_route");
     }
 

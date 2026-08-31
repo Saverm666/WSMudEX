@@ -3,20 +3,43 @@
   "use strict";
 
   global.WSMudPlugin.registerFeature("combat-automation", function install(context) {
-    const { WG, G, legacy, messageAppend } = context;
+    const { WG, G, legacy } = context;
     const blockedPerforms = legacy.getBlockedPerforms();
     const getSkills = () => (Array.isArray(G.skills) ? G.skills : []);
 
     Object.assign(WG, {
+      reportAutoAttackState: function (enabled) {
+        var dialog = global.Dialog,
+          process = global.Process,
+          channel = dialog && dialog.channel,
+          message =
+            "自动攻击 " + (enabled ? "已开启" : "已关闭"),
+          data = {
+            ch: "tm",
+            name: G.name || "插件",
+            uid: G.id || null,
+            content: message,
+          };
+        if (
+          !channel ||
+          !process ||
+          !process.channel ||
+          typeof channel.createElement !== "function"
+        )
+          return;
+        var rendered = channel.createElement(data, false);
+        rendered && process.channel.push(rendered);
+        process.channel.scroll2end && process.channel.scroll2end();
+      },
       auto_preform_switch: function () {
         G.auto_preform
           ? ((G.auto_preform = !1),
-            messageAppend("<hio>自动施法</hio>关闭"),
+            WG.reportAutoAttackState(false),
             WG.auto_preform("stop"))
           : ((G.auto_preform = !0),
-            messageAppend("<hio>自动施法</hio>开启"),
+            WG.reportAutoAttackState(true),
             WG.auto_preform());
-        WG.updateNativeAutoAttackActionState();
+        WG.syncAutoAttackUiState();
       },
       forcebufskil: "",
       bufskill: {},
@@ -52,6 +75,7 @@
               (WG.bufskill = {})));
         else if (!G.preform_timer && 0 != G.auto_preform) {
           var t;
+          WG.prepareAutoFirstRound();
           $(".auto_perform").css("background", "#3E0000");
           if (!getSkills().length)
             messageAppend(
@@ -102,6 +126,8 @@
                 var o;
                 0 == G.in_fight
                   ? WG.auto_preform("stop")
+                  : WG.processAutoFirstRound()
+                    ? void 0
                   : ((o = []),
                     null == WG.xubuf &&
                       (WG.xubuf = setTimeout(async () => {
@@ -198,6 +224,7 @@
                 WG.auto_preform("stop");
                 return;
               }
+              if (WG.processAutoFirstRound()) return;
               for (var e of getSkills()) {
                 if (
                   !WG.inArray(e.id, blockedPerforms) &&

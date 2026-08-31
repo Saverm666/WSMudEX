@@ -68,7 +68,12 @@
           messageAppend("<hir>衙门追捕模块尚未加载。</hir>");
           return;
         }
-        return WG.go_yamen_task();
+        var run = function () {
+          return WG.go_yamen_task();
+        };
+        return typeof WG.runAfterBuiltinActionLoadout === "function"
+          ? WG.runAfterBuiltinActionLoadout("yamen", run)
+          : run();
       },
       smartHomeHook: void 0,
       smartHomeTimer: void 0,
@@ -83,9 +88,9 @@
         }
       },
       go_home: function () {
-        WG.runAfterOptionalTravelEquipment(function (done) {
-          WG.prepareSmartEquipment("intelligence", done);
-        }, WG.startSmartHomeTravel);
+        return typeof WG.runAfterBuiltinActionLoadout === "function"
+          ? WG.runAfterBuiltinActionLoadout("home", WG.startSmartHomeTravel)
+          : WG.startSmartHomeTravel();
       },
       startSmartHomeTravel: function () {
         WG.cancelSmartHomeWatch();
@@ -106,7 +111,12 @@
         WG.Send("goto home");
       },
       go_wumiao: function () {
-        WG.go("扬州城-武庙");
+        var run = function () {
+          WG.go("扬州城-武庙");
+        };
+        return typeof WG.runAfterBuiltinActionLoadout === "function"
+          ? WG.runAfterBuiltinActionLoadout("wumiao", run)
+          : run();
       },
       team_resonance_hook: void 0,
       team_resonance_active: !1,
@@ -145,11 +155,12 @@
         messageAppend("正在检查队伍并发送：共鸣");
       },
       go_master: function () {
-        WG.runAfterOptionalTravelEquipment(function (done) {
-          WG.prepareSmartEquipment("study", done);
-        }, function () {
+        var run = function () {
           WG.Send("goto fam1");
-        });
+        };
+        return typeof WG.runAfterBuiltinActionLoadout === "function"
+          ? WG.runAfterBuiltinActionLoadout("master", run)
+          : run();
       },
       parsePotentialWorkBonuses: function (items) {
         var bonuses = { mining: 0, fishing: 0, herbalism: 0 },
@@ -277,11 +288,7 @@
       },
       startPotentialWork: function (work, fallbacks) {
         work = work || { id: "mining", name: "挖矿", bonus: 0 };
-        WG.runAfterOptionalTravelEquipment(function (done) {
-          WG.preparePotentialWorkEquipment(work, done);
-        }, function () {
-          WG.startPreparedPotentialWork(work, fallbacks);
-        });
+        WG.startPreparedPotentialWork(work, fallbacks);
       },
       startPreparedPotentialWork: function (work, fallbacks) {
         work = work || { id: "mining", name: "挖矿", bonus: 0 };
@@ -294,6 +301,7 @@
           WG.Send("stopstate");
           return Promise.resolve(WG.go("扬州城-药林")).then(function () {
             WG.Send("cai");
+            WG.schedulePotentialWorkAutoCheck("herbalism");
           });
         }
         if (work.id == "fishing") {
@@ -346,6 +354,7 @@
           setTimeout(function () {
             Promise.resolve(WG.go("扬州城-江边")).then(function () {
               WG.Send("diao");
+              WG.schedulePotentialWorkAutoCheck("fishing");
             });
           }, equippedRod ? 0 : 500);
         });
@@ -440,6 +449,8 @@
                         await WG.sleep(2e3),
                         await WG.go("扬州城-矿山"),
                         WG.Send("wa"),
+                        skipPotentialSelection &&
+                          WG.schedulePotentialWorkAutoCheck("mining"),
                         void WG.zdwk("remove", !1)
                       );
                   } else if (s.items) {
@@ -451,6 +462,8 @@
                         await WG.sleep(1e3),
                         await WG.go("扬州城-矿山"),
                         WG.Send("wa"),
+                        skipPotentialSelection &&
+                          WG.schedulePotentialWorkAutoCheck("mining"),
                         void WG.zdwk("remove", !1)
                       );
                     for (let e = 0; e < s.items.length; e++) {
@@ -470,6 +483,8 @@
                         await WG.sleep(2e3),
                         await WG.go("扬州城-矿山"),
                         WG.Send("wa"),
+                        skipPotentialSelection &&
+                          WG.schedulePotentialWorkAutoCheck("mining"),
                         void WG.zdwk("remove", !1)
                       );
                     (await WG.go("扬州城-打铁铺"), WG.Send("look 1"));
