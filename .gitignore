@@ -1,0 +1,36 @@
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and local tooling
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Logs, tests, and local caches
+*.log
+coverage/
+.cache/
+.pytest_cache/
+__pycache__/
+
+# Dependencies and generated packages
+node_modules/
+dist/
+build/
+*.crx
+*.zip
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+

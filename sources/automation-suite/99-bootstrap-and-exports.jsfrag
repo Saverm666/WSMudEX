@@ -1,0 +1,492 @@
+  var originWindow = {};
+  var automationMessageMenu;
+  $(document).ready(function () {
+    function receiveMessage(event) {
+      originWindow = event;
+      return automationMessageMenu.receiveMessage(event);
+    }
+    function makeTp(e = 0) {
+      return automationMessageMenu.makeTp(e);
+    }
+    function createSomeMenu() {
+      return automationMessageMenu.createSomeMenu();
+    }
+    function executeLegacyScript(source) {
+      syncAutomationStaticDataFromService();
+      try {
+        return eval(source);
+      } finally {
+        syncAutomationStaticDataToService();
+      }
+    }
+    ($("head").append(
+      '<link href="https://cdn.staticfile.org/jquery-contextmenu/3.0.0-beta.2/jquery.contextMenu.min.css" rel="stylesheet">',
+    ),
+      $("head").append(
+        '<link href="https://cdn.staticfile.org/layer/2.3/skin/layer.css" rel="stylesheet">',
+      ),
+      $("head").append(
+        '<link href="https://cdn.staticfile.org/font-awesome/4.7.0/css/font-awesome.css" rel="stylesheet">',
+      ),
+      $("body").append(UI.codeInput),
+      $("body").append(
+        $('<audio id="beep-alert" preload="auto"></audio>').append(
+          '<source src="https://cdn.jsdelivr.net/gh/mapleobserver/wsmud-script/plugins/complete.mp3" type="audio/mpeg">',
+        ),
+      ),
+      setTimeout(() => {
+        var e = document.createElement("script");
+        (e.setAttribute("src", "https://cdn.staticfile.org/layer/2.3/layer.js"),
+          document.head.appendChild(e),
+          console.log("layer 加载完毕!"),
+          setInterval(() => {
+            var e = "";
+            (parseInt(10 * Math.random()) < 3
+              ? (e =
+                  "<hir>【插件】有任何问题欢迎加入 武神传说-仙界 367657589 进行技术交流，脚本讨论。\n<hir>")
+              : parseInt(10 * Math.random()) < 10 &&
+                (e =
+                  "<hir>【插件】欢迎访问 https://emeisuqing.github.io/wsmud.old/ 苏轻 助你武神之路上更加轻松愉快。\n<hir>"),
+              parseInt(10 * Math.random()) < 2
+                ? $(".channel pre").append(e)
+                : console.log(""),
+              ($(".channel")[0].scrollTop = 99999));
+          }, 32e4));
+      }, 2e3),
+      (() => {
+        var pluginRuntime = unsafeWindow.WSMudPlugin;
+        if (!pluginRuntime)
+          throw new Error("插件模块运行包未加载，停止初始化自动化套件");
+        for (var featureName of [
+          "notification-services",
+          "automation-message-menu",
+          "custom-workflows",
+          "inventory-list-settings",
+          "command-transport",
+          "navigation-core",
+          "wait-until-at",
+          "activity-automation",
+          "yaota-automation",
+          "legacy-status-monitors",
+          "master-task-automation",
+          "daily-workflows",
+          "data-maintenance",
+          "custom-command-buttons",
+          "equipment-loadouts",
+          "wedding-automation",
+          "yamen-automation",
+          "room-state-bridge",
+          "item-command-helpers",
+          "inventory-cleanup",
+          "warehouse-sorting",
+          "medicine-automation",
+          "item-use-automation",
+          "sparring-recovery",
+          "boss-hunter",
+          "training-calculators",
+          "combat-automation",
+          "toolbox-scheduler",
+          "role-switcher",
+          "dashboard-equipment",
+          "navigation-enhancements",
+          "auto-first-round",
+          "layout-controls",
+          "ui-shell",
+          "plugin-settings",
+        ])
+          if (!pluginRuntime.hasFeature(featureName))
+            throw new Error("插件模块缺失: " + featureName);
+        var pluginServices = {};
+        pluginRuntime.installFeatures({
+        WG: WG,
+        G: G,
+        UI: UI,
+        T: T,
+        L: L,
+        services: pluginServices,
+        jquery: $,
+        clone: structuredClone,
+        timers: {
+          setTimeout: setTimeout,
+          clearTimeout: clearTimeout,
+          setInterval: setInterval,
+          clearInterval: clearInterval,
+        },
+        confirm: function (message) {
+          return window.confirm(message);
+        },
+        logger: console,
+        getWG: function () {
+          return WG;
+        },
+        getRoleName: function () {
+          return role;
+        },
+        getRaid: function () {
+          return unsafeWindow && unsafeWindow.ToRaid;
+        },
+        getTimer: function () {
+          return timer;
+        },
+        getButtonMode: function () {
+          return inzdy_btn;
+        },
+        getStopAuto: function () {
+          return stopauto;
+        },
+        getNow: function () {
+          return new Date();
+        },
+        deferred: function () {
+          return jQuery.Deferred();
+        },
+        executeLegacyScript: executeLegacyScript,
+        openWindow: function (url, target) {
+          return window.open(url, target);
+        },
+        prompt: function (message, defaultValue) {
+          return window.prompt(message, defaultValue);
+        },
+        messageAppend: messageAppend,
+        messageClear: messageClear,
+        storage: {
+          get: function (key, fallback) {
+            return arguments.length > 1
+              ? GM_getValue(key, fallback)
+              : GM_getValue(key);
+          },
+          set: function (key, value) {
+            GM_setValue(key, value);
+          },
+        },
+        legacy: {
+          getRoleId: function () {
+            return roleid;
+          },
+          getRoleName: function () {
+            return role;
+          },
+          getWorkflows: function () {
+            return zml;
+          },
+          setWorkflows: function (value) {
+            zml = value;
+          },
+          getWorkflowDisplaySetting: function () {
+            return zmlshowsetting;
+          },
+          setWorkflowDisplaySetting: function (value) {
+            zmlshowsetting = value;
+          },
+          getCustomSkillList: function () {
+            return zdyskilllist;
+          },
+          getCustomButtonList: function () {
+            return zdy_btnlist;
+          },
+          setCustomButtonList: function (value) {
+            zdy_btnlist = value;
+          },
+          getCustomButtonMode: function () {
+            return inzdy_btn;
+          },
+          setCustomButtonMode: function (value) {
+            inzdy_btn = value;
+          },
+          getEquipmentLoadouts: function () {
+            return eqlist;
+          },
+          setEquipmentLoadouts: function (value) {
+            eqlist = value;
+          },
+          getSkillLoadouts: function () {
+            return skilllist;
+          },
+          setSkillLoadouts: function (value) {
+            skilllist = value;
+          },
+          copyToClipboard: function (value) {
+            return copyToClipboard(value);
+          },
+          getDisabledPerforms: function () {
+            return unauto_pfm;
+          },
+          setDisabledPerforms: function (value) {
+            unauto_pfm = value;
+          },
+          getBlockedPerforms: function () {
+            return blackpfm;
+          },
+          getWudaoPerforms: function () {
+            return wudao_pfm;
+          },
+          getPackGoods: function () {
+            return pgoods;
+          },
+          getGoods: function () {
+            return goods;
+          },
+          resetPackGoods: function () {
+            pgoods = goods;
+          },
+          getNpcs: function () {
+            return npcs;
+          },
+          getBossSettings: function () {
+            return {
+              blacklist: GM_getValue(roleid + "_blacklist", blacklist),
+              pfmDelay: GM_getValue(roleid + "_ks_pfm", ks_pfm),
+              waitSeconds: GM_getValue(roleid + "_ks_wait", ks_wait),
+              autoEquipment: GM_getValue(roleid + "_auto_eq", autoeq),
+            };
+          },
+          getBossRoutes: function () {
+            return (needfind = reconcileAutomationStaticData(
+              "needfind",
+              needfind,
+              automationStaticData.getNeedFindRoutes(),
+              (value) => automationStaticData.setNeedFindRoutes(value),
+            ));
+          },
+          getYamenNpc: function () {
+            return zb_npc;
+          },
+          setYamenNpc: function (value) {
+            zb_npc = value;
+          },
+          getYamenPlace: function () {
+            return zb_place;
+          },
+          setYamenPlace: function (value) {
+            zb_place = value;
+          },
+          getAutoCommand: function () {
+            return GM_getValue(roleid + "_auto_command", auto_command);
+          },
+          replaceStoreList: function (value) {
+            store_list = value;
+          },
+          setCustomStoreList: function (value) {
+            zdy_item_store = value;
+          },
+          getEquipment: function () {
+            return equip;
+          },
+          getPackData: function () {
+            return packData;
+          },
+          getCustomStoreList2: function () {
+            return zdy_item_store2;
+          },
+          setCustomStoreList2: function (value) {
+            zdy_item_store2 = value;
+          },
+          getCustomItemLock: function () {
+            return zdy_item_lock;
+          },
+          setCustomItemLock: function (value) {
+            zdy_item_lock = value;
+          },
+          getCustomItemDrop: function () {
+            return zdy_item_drop;
+          },
+          setCustomItemDrop: function (value) {
+            zdy_item_drop = value;
+          },
+          getCustomItemDisassemble: function () {
+            return zdy_item_fenjie;
+          },
+          setCustomItemDisassemble: function (value) {
+            zdy_item_fenjie = value;
+          },
+          replaceLockList: function (value) {
+            lock_list = value;
+          },
+          replaceDropList: function (value) {
+            drop_list = value;
+          },
+          replaceDisassembleList: function (value) {
+            fenjie_list = value;
+          },
+          getRoomData: function () {
+            return roomData;
+          },
+          loadStatusMonitors: function () {
+            ztjk_item = GM_getValue(roleid + "_ztjk", ztjk_item);
+            return ztjk_item;
+          },
+          getPlaceRoutes: function () {
+            return (place = reconcileAutomationStaticData(
+              "place",
+              place,
+              automationStaticData.getPlaceRoutes(),
+              (value) => automationStaticData.setPlaceRoutes(value),
+            ));
+          },
+          getNeedFindRoutes: function () {
+            return (needfind = reconcileAutomationStaticData(
+              "needfind",
+              needfind,
+              automationStaticData.getNeedFindRoutes(),
+              (value) => automationStaticData.setNeedFindRoutes(value),
+            ));
+          },
+          getFamily: function () {
+            return family;
+          },
+          formatDate: function (pattern, date) {
+            return dateFormat(pattern, date);
+          },
+          getMasterTasks: function () {
+            return (sm_array = reconcileAutomationStaticData(
+              "sm_array",
+              sm_array,
+              automationStaticData.getMasterTasks(),
+              (value) => automationStaticData.setMasterTasks(value),
+            ));
+          },
+          getSmLoser: function () {
+            return GM_getValue(roleid + "_sm_loser", sm_loser);
+          },
+          getSmGetStore: function () {
+            return sm_getstore;
+          },
+          getSmAny: function () {
+            return GM_getValue(roleid + "_sm_any", sm_any);
+          },
+          setSmAny: function (value) {
+            sm_any = value;
+          },
+          getProcess: function () {
+            return unsafeWindow && unsafeWindow.Process
+              ? unsafeWindow.Process
+              : undefined;
+          },
+          getSmPrice: function () {
+            return sm_price;
+          },
+          getSaveAddress: function () {
+            return saveAddr;
+          },
+          getStoreList: function () {
+            return store_list;
+          },
+          getDropList: function () {
+            return drop_list;
+          },
+          getAutoBuyList: function () {
+            return auto_buylist;
+          },
+          getAutoSkillPaperSellList: function () {
+            return auto_skillPaperSelllist;
+          },
+          getLockList: function () {
+            return lock_list;
+          },
+          getDisassembleList: function () {
+            return fenjie_list;
+          },
+          getKeyApi: function () {
+            return KEY;
+          },
+          setRoomData: function (value) {
+            roomData = value;
+            if (unsafeWindow.roomData !== undefined) unsafeWindow.roomData = value;
+          },
+          getWorkTimer: function () {
+            return timer;
+          },
+          setWorkTimer: function (value) {
+            timer = value;
+          },
+          isTransportAvailable: function () {
+            return CanUse;
+          },
+          getSendCommand: function () {
+            return send_cmd;
+          },
+          setStopAuto: function (value) {
+            stopauto = value;
+          },
+          getProConsole: function () {
+            return ProConsole;
+          },
+          getPushSettings: function () {
+            return {
+              enabled: pushSwitch,
+              type: pushType,
+              token: pushToken,
+            };
+          },
+          getRaid: function () {
+            return unsafeWindow.ToRaid;
+          },
+          getTimeQuestions: function () {
+            return timequestion;
+          },
+          setTimeQuestions: function (value) {
+            timequestion = value;
+          },
+          getDpsState: function () {
+            return {
+              lock: dpslock,
+              battleTime: battletime,
+              normalCount: pfmnum,
+              normalDamage: pfmdps,
+              criticalCount: criticalnum,
+              criticalDamage: critical,
+            };
+          },
+          resetDpsState: function () {
+            dpslock = criticalnum = critical = pfmnum = pfmdps = 0;
+          },
+          formatChineseUnit: function (value) {
+            return addChineseUnit(value);
+          },
+          renderActionButtons: function () {
+            return inzdy_btn ? UI.zdybtnui() : UI.btnui();
+          },
+        },
+        });
+        automationMessageMenu = pluginServices.automationMessageMenu;
+        if (!automationMessageMenu)
+          throw new Error("插件模块缺失: automation-message-menu 服务");
+        S = pluginServices.remoteConfig;
+        FakerTTS = pluginServices.speech;
+        Beep = pluginServices.beep;
+        Push = pluginServices.push;
+        MusicBox = pluginServices.MusicBox;
+      })(),
+      KEY.init(),
+      WG.init(),
+      GI.init(),
+      (unsafeWindow.WGRunNativeExtensionAction = WG.runNativeExtensionAction),
+      (unsafeWindow.WGUpdateNativeAutoAttackActionState =
+        WG.updateNativeAutoAttackActionState),
+      (unsafeWindow.WG = WG),
+      (unsafeWindow.T = T),
+      (unsafeWindow.L = L),
+      (unsafeWindow.G = G),
+      (unsafeWindow.show_msg = show_msg),
+      (unsafeWindow.messageClear = messageClear),
+      (unsafeWindow.messageAppend = messageAppend),
+      (unsafeWindow.send_cmd = send_cmd),
+      (unsafeWindow.roomData = roomData),
+      (unsafeWindow.MusicBox = MusicBox),
+      (unsafeWindow.FakerTTS = FakerTTS),
+      (unsafeWindow.Beep = Beep),
+      (unsafeWindow.Push = Push),
+      (unsafeWindow.WSStore = store),
+      (unsafeWindow.imgShow = imgShow),
+      window.addEventListener("message", receiveMessage, !1),
+      $(".room-name").on("click", (e) => {
+        (e.preventDefault(), $(".room-name").contextMenu({ x: 1, y: 1 }));
+      }),
+      $.contextMenu({
+        selector: ".room-name",
+        build: function (e, t) {
+          return createSomeMenu();
+        },
+      }));
+  });
+})();

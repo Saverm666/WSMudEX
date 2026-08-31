@@ -1,0 +1,64 @@
+const ClientDialogShop = unsafeWindow.WSMudClient.createModule("dialog-shop", {
+  getDialog: () => Dialog,
+  jquery: $,
+  getSendCommand: () => SendCommand,
+  getMoneyToStr: () => moneyToStr,
+});
+Dialog.shop = ClientDialogShop.shop;
+
+const ClientDialogSocial = unsafeWindow.WSMudClient.createModule(
+  "dialog-social",
+  {
+    getDialog: () => Dialog,
+    jquery: $,
+    getSendCommand: () => SendCommand,
+    getToolAction: () => ToolAction,
+    getReceiveMessage: () => ReceiveMessage,
+    getProcess: () => Process,
+    getFormatTimeSpan: () => format_time_span,
+  },
+);
+Dialog.message = ClientDialogSocial.message;
+Dialog.relation = ClientDialogSocial.relation;
+Dialog.party = ClientDialogSocial.party;
+Dialog.team = ClientDialogSocial.team;
+
+const ClientDialogEvents = unsafeWindow.WSMudClient.createModule(
+  "dialog-events",
+  {
+    getDialog: () => Dialog,
+    jquery: $,
+    getSendCommand: () => SendCommand,
+    getToolAction: () => ToolAction,
+  },
+);
+Dialog.events = ClientDialogEvents.events;
+
+const ClientDialogPm = unsafeWindow.WSMudClient.createModule("dialog-pm", {
+  getDialog: () => Dialog,
+  jquery: $,
+  getSendCommand: () => SendCommand,
+  getMoneyToStr: () => moneyToStr,
+  now: () => Date.now(),
+  timers: {
+    setInterval: setInterval,
+    clearInterval: clearInterval,
+  },
+});
+Dialog.pm = ClientDialogPm.pm;
+
+function format_time_span(_0x4d27f3) {
+  let _0x12b5c4 = Math.floor(_0x4d27f3 / 1000);
+  if (_0x12b5c4 < 0) {
+    _0x12b5c4 = 0;
+  }
+  if (_0x12b5c4 > 3600) {
+    let _0x541fc3 = Math.floor(_0x12b5c4 / 3600) + "小时";
+    _0x12b5c4 = _0x12b5c4 % 3600;
+    _0x541fc3 += Math.floor(_0x12b5c4 / 60) + "分";
+    return _0x541fc3;
+  }
+  let _0x1d1672 = Math.floor(_0x12b5c4 / 60) + "分";
+  _0x12b5c4 = _0x12b5c4 % 60;
+  return _0x1d1672 + _0x12b5c4 + "秒";
+}

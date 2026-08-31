@@ -1,0 +1,910 @@
+      executeLegacyScript: function (source) {
+        syncAutomationStaticDataFromService();
+        try {
+          return eval(source);
+        } finally {
+          syncAutomationStaticDataToService();
+        }
+      },
+      zmlfire: async function (zml) {
+        return WG.customWorkflows && WG.customWorkflows.zmlfire
+          ? WG.customWorkflows.zmlfire(zml)
+          : void 0;
+      },
+      zmlztjk: function () {
+        return WG.customWorkflows && WG.customWorkflows.zmlztjk
+          ? WG.customWorkflows.zmlztjk()
+          : void 0;
+      },
+      zml_edit: function () {
+        return WG.customWorkflows && WG.customWorkflows.zml_edit
+          ? WG.customWorkflows.zml_edit()
+          : void 0;
+      },
+      isseted: !1,
+      zml_showp: function () {
+        return WG.customWorkflows && WG.customWorkflows.zml_showp
+          ? WG.customWorkflows.zml_showp()
+          : void 0;
+      },
+      ztjk_edit: function () {
+        ((ztjk_item = GM_getValue(roleid + "_ztjk", ztjk_item)),
+          messageClear(),
+          messageAppend(UI.ztjksetting),
+          $(".ztjk_sharedfind").on("click", () => {
+            var e = prompt("请输入分享码");
+            S.getShareJson(e, (e) => {
+              e = JSON.parse(e.json);
+              null != e.type
+                ? ($("#ztjk_name").val(e.name),
+                  $("#ztjk_type").val(e.type),
+                  $("#ztjk_action").val(e.action),
+                  $("#ztjk_keyword").val(e.keyword),
+                  $("#ztjk_ishave").val(e.ishave),
+                  $("#ztjk_send").val(e.send),
+                  $("#ztjk_senduser").val(e.senduser),
+                  $("#ztjk_maxcount").val(e.maxcount),
+                  $("#ztjk_istip").val(e.istip))
+                : L.msg("不合法");
+            });
+          }),
+          $(".ztjk_editadd").on("click", function () {
+            var s = {
+              name: $("#ztjk_name").val(),
+              type: $("#ztjk_type").val(),
+              action: $("#ztjk_action").val(),
+              keyword: $("#ztjk_keyword").val(),
+              ishave: $("#ztjk_ishave").val(),
+              send: $("#ztjk_send").val(),
+              senduser: $("#ztjk_senduser").val(),
+              isactive: 1,
+              maxcount: $("#ztjk_maxcount").val(),
+              istip: $("#ztjk_istip").val(),
+            };
+            let o = !0;
+            (ztjk_item.forEach(function (e, t) {
+              e.name == $("#ztjk_name").val() && ((ztjk_item[t] = s), (o = !1));
+            }),
+              o && ztjk_item.push(s),
+              GM_setValue(roleid + "_ztjk", ztjk_item),
+              WG.ztjk_edit(),
+              messageAppend("保存成功", 2),
+              WG.ztjk_func());
+          }),
+          $(".ztjk_editdel").on("click", function () {
+            let s = $("#ztjk_name").val();
+            ztjk_item.forEach(function (e, t) {
+              e.name == s &&
+                (ztjk_item.baoremove(t),
+                GM_setValue(roleid + "_ztjk", ztjk_item),
+                WG.ztjk_edit(),
+                messageAppend("删除成功", 2),
+                WG.ztjk_func());
+            });
+          }),
+          ztjk_item.forEach(function (e, t) {
+            var s = "<span class='addrun" + t + "'>编辑" + e.name + "</span>",
+              s = ($("#ztjk_show").append(s), "注入"),
+              s =
+                "<span class='setaction" +
+                t +
+                "'>" +
+                (s = e.isactive && 1 == e.isactive ? "暂停" : s) +
+                e.name +
+                "</span>",
+              s =
+                ($("#ztjk_set").append(s),
+                "<span class='shareztjk" + t + "'>分享" + e.name + "</span>");
+            $("#ztjk_show").append(s);
+          }),
+          ztjk_item.forEach(function (e, t) {
+            ($(".addrun" + t).on("click", function () {
+              ($("#ztjk_name").val(e.name),
+                $("#ztjk_type").val(e.type),
+                $("#ztjk_action").val(e.action),
+                $("#ztjk_keyword").val(e.keyword),
+                $("#ztjk_ishave").val(e.ishave),
+                $("#ztjk_send").val(e.send),
+                $("#ztjk_senduser").val(e.senduser),
+                $("#ztjk_maxcount").val(e.maxcount),
+                null == e.istip && $("#ztjk_istip").val(1),
+                $("#ztjk_istip").val(e.istip));
+            }),
+              $(".setaction" + t).on("click", function () {
+                (0 <= this.textContent.indexOf("暂停")
+                  ? (ztjk_item[t].isactive = 0)
+                  : (ztjk_item[t].isactive = 1),
+                  GM_setValue(roleid + "_ztjk", ztjk_item),
+                  WG.ztjk_func(),
+                  WG.ztjk_edit());
+              }),
+              $(".shareztjk" + t).on("click", function () {
+                S.shareJson(G.id, e);
+              }));
+          }));
+      },
+      gpSkill_hook: void 0,
+      getPlayerSkill: async function () {
+        ((WG.gpSkill_hook = WG.add_hook("dialog", (t) => {
+          t.dialog &&
+            "skills" == t.dialog &&
+            t.items &&
+            null != t.items &&
+            (messageAppend(`<div class="item-commands ">
+                <span class = "copycha" data-clipboard-target = ".target1" >
+                        技能详情复制到剪贴板 </span></div> `),
+            $(".copycha").on("click", () => {
+              var e = G.level.replace(/<\/?.+?>/g, "").replace(/ /g, ""),
+                e = {
+                  player: role,
+                  roleid: roleid,
+                  level: e,
+                  family: G.pfamily,
+                  items: t.items,
+                };
+              (copyToClipboard(JSON.stringify(e)), messageAppend("复制成功"));
+            }),
+            WG.remove_hook(WG.gpSkill_hook),
+            (WG.gpSkill_hook = void 0));
+        })),
+          KEY.do_command("skills"),
+          KEY.do_command("skills"),
+          WG.Send("cha"));
+      },
+      make_config: async function () {
+        let t = {};
+        (GM_listValues().forEach((e) => {
+          0 <= e.indexOf(roleid) && (t[e] = GM_getValue(e));
+        }),
+          (t._shieldswitch = GM_getValue("_shieldswitch", shieldswitch)),
+          (t._shield = GM_getValue("_shield", shield)),
+          (t._shieldkey = GM_getValue("_shieldkey", shieldkey)),
+          (t._pushSwitch = GM_getValue("_pushSwitch", pushSwitch)),
+          (t._pushType = GM_getValue("_pushType", pushType)),
+          (t._pushToken = GM_getValue("_pushToken", pushToken)),
+          S.uploadUserConfig(G.id, t, (e) => {
+            "true" == e && L.msg("已成功上传");
+          }));
+      },
+      load_config: async function () {
+        S.getUserConfig(G.id, (e) => {
+          if ("" != e) {
+            var t,
+              s = JSON.parse(e);
+            for (t in s) GM_setValue(t, s[t]);
+            (GI.configInit(),
+              WG.setting(),
+              WG.ztjk_func(),
+              WG.zml_showp(),
+              WG.dsj_func(),
+              L.msg("已成功加载"));
+          }
+        });
+      },
+      setting: function () {
+        var a,
+          keyitem =
+            (KEY.do_command("setting"),
+            $(".footer-item")[$(".footer-item").length - 1].click(),
+            0 == $(".dialog-extend .zdy_dialog").length &&
+              ((a = UI.syssetting()), $(".dialog-extend").prepend(a)),
+            $(".dialog-extend").off("click"),
+            $("#family").off("change"),
+            $("#wudao_pfm").off("focusout"),
+            $(".savebtn").off("click"),
+            $(".clear_skillJson").off("click"),
+            $(".backup_btn").off("click"),
+            $(".clean_dps").off("click"),
+            $(".load_btn").off("click"),
+            $(".update_store").off("click"),
+            $(".update_id_all").off("click"),
+            $(".clean_id_all").off("click"),
+            $("#autobuy").off("change"),
+            $("#autoSkillPaperSell").off("change"),
+            $("#loginhml").off("change"),
+            $("#backimageurl").off("change"),
+            $("#statehml").off("change"),
+            $("#shieldkey").off("focusout"),
+            $("#shield").off("focusout"),
+            $("#funnycalc").off("click"),
+            $("#dpssakada").off("click"),
+            $("#silence").off("click"),
+            $("#zdyskilllist").off("change"),
+            $("#zdyskillsswitch").off("click"),
+            $("#shieldswitch").off("click"),
+            $("#welcome").off("focusout"),
+            $("#blacklist").off("change"),
+            $("#auto_command").off("change"),
+            $("#store_fenjie_info").off("change"),
+            $("#store_drop_info").off("change"),
+            $("#lock_info").off("change"),
+            $("#store_info2").off("change"),
+            $("#store_info").off("change"),
+            $("#unauto_pfm").off("change"),
+            $("#getitemShow").off("click"),
+            $("#zmlshowsetting").off("change"),
+            $("#bagFull").off("change"),
+            $("pushSwitch").off("click"),
+            $("pushType").off("change"),
+            $("pushToken").off("change"),
+            $("#autorelogin").off("click"),
+            $("#autoupdateStore").off("click"),
+            $("#saveAddr").off("click"),
+            $("#autorewardgoto").off("click"),
+            $("#autopfmswitch").off("click"),
+            $("#auto_eq").off("change"),
+            $("#ks_Boss").off("click"),
+            $("#marry_kiss").off("click"),
+            $("#ks_wait").off("focusout"),
+            $("#ks_pfm").off("focusout"),
+            $("#sm_getstore").off("click"),
+            $("#sm_price").off("click"),
+            $("#sm_any").off("click"),
+            $("#sm_loser").off("click"),
+            $(".dialog-extend").on("click", ".switch2", UI.switchClick),
+            $("#family").change(function () {
+              ((family = $("#family").val()),
+                GM_setValue(roleid + "_family", family));
+            }),
+            $("#wudao_pfm").focusout(function () {
+              ((wudao_pfm = $("#wudao_pfm").val()),
+                GM_setValue(roleid + "_wudao_pfm", wudao_pfm));
+            }),
+            $("#sm_loser").click(function () {
+              ((sm_loser = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_sm_loser", sm_loser));
+            }),
+            $("#sm_any").click(function () {
+              ((sm_any = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_sm_any", sm_any));
+            }),
+            $("#sm_price").click(function () {
+              ((sm_price = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_sm_price", sm_price));
+            }),
+            $("#sm_getstore").click(function () {
+              ((sm_getstore = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_sm_getstore", sm_getstore));
+            }),
+            $("#ks_pfm").focusout(function () {
+              ((ks_pfm = $("#ks_pfm").val()),
+                GM_setValue(roleid + "_ks_pfm", ks_pfm));
+            }),
+            $("#ks_wait").focusout(function () {
+              ((ks_wait = $("#ks_wait").val()),
+                GM_setValue(roleid + "_ks_wait", ks_wait));
+            }),
+            $("#marry_kiss").click(function () {
+              ((automarry = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_automarry", automarry));
+            }),
+            $("#ks_Boss").click(function () {
+              ((autoKsBoss = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_autoKsBoss", autoKsBoss));
+            }),
+            $("#auto_eq").focusout(function () {
+              ((autoeq = $("#auto_eq").val()),
+                GM_setValue(roleid + "_auto_eq", autoeq));
+            }),
+            $("#autopfmswitch").click(function () {
+              ((auto_pfmswitch = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_auto_pfmswitch", auto_pfmswitch),
+                (G.auto_preform = "开" == auto_pfmswitch),
+                WG.updateNativeAutoAttackActionState());
+            }),
+            $("#autopfmmode").click(function () {
+              ((auto_pfm_mode = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_auto_pfm_mode", auto_pfm_mode),
+                (G.auto_pfm_mode = "开" == auto_pfm_mode));
+            }),
+            $("#autorewardgoto").click(function () {
+              ((auto_rewardgoto = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_auto_rewardgoto", auto_rewardgoto));
+            }),
+            $("#busyinfo").click(function () {
+              ((busy_info = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_busy_info", busy_info));
+            }),
+            $("#saveAddr").click(function () {
+              ((saveAddr = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_saveAddr", saveAddr));
+            }),
+            $("#autoupdateStore").click(function () {
+              ((auto_updateStore = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_auto_updateStore", auto_updateStore));
+            }),
+            $("#autorelogin").click(function () {
+              ((auto_relogin = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_auto_relogin", auto_relogin));
+            }),
+            $("#zmlshowsetting").change(function () {
+              ((zmlshowsetting = $("#zmlshowsetting").val()),
+                GM_setValue(roleid + "_zmlshowsetting", zmlshowsetting),
+                WG.zml_showp());
+            }),
+            $("#bagFull").change(function () {
+              ((bagFull = $("#bagFull").val()),
+                GM_setValue(roleid + "_bagFull", bagFull));
+            }),
+            $("#pushSwitch").click(function () {
+              ((pushSwitch = WG.switchReversal($(this))),
+                GM_setValue("_pushSwitch", pushSwitch));
+            }),
+            $("#pushType").change(function () {
+              ((pushType = $("#pushType").val()),
+                GM_setValue("_pushType", pushType));
+            }),
+            $("#pushToken").focusout(function () {
+              ((pushToken = $("#pushToken").val()),
+                GM_setValue("_pushToken", pushToken));
+            }),
+            $("#color_select").change(function () {
+              ((color_select = $("#color_select").val()),
+                GM_setValue("color_select", color_select));
+            }),
+            $("#getitemShow").click(function () {
+              ((getitemShow = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_getitemShow", getitemShow),
+                (G.getitemShow = "开" == getitemShow));
+            }),
+            $("#unauto_pfm").change(function () {
+              ((unauto_pfm = $("#unauto_pfm").val()),
+                GM_setValue(roleid + "_unauto_pfm", unauto_pfm));
+              var e,
+                t = unauto_pfm.split(",");
+              blackpfm = [];
+              for (e of t) e && blackpfm.push(e);
+            }),
+            $("#store_info").change(function () {
+              ((zdy_item_store = $("#store_info").val()),
+                GM_setValue(roleid + "_zdy_item_store", zdy_item_store),
+                (store_list = (store_list = zdy_item_store.split(",")).concat(
+                  zdy_item_store2.split(","),
+                )));
+            }),
+            $("#store_info2").change(function () {
+              ((zdy_item_store2 = $("#store_info2").val()),
+                GM_setValue(roleid + "_zdy_item_store2", zdy_item_store2),
+                (store_list = (store_list = zdy_item_store2.split(",")).concat(
+                  zdy_item_store.split(","),
+                )));
+            }),
+            $("#lock_info").change(function () {
+              ((zdy_item_lock = $("#lock_info").val()),
+                GM_setValue(roleid + "_zdy_item_lock", zdy_item_lock),
+                (lock_list = zdy_item_lock.split(",")));
+            }),
+            $("#store_drop_info").change(function () {
+              ((zdy_item_drop = $("#store_drop_info").val()),
+                GM_setValue(roleid + "_zdy_item_drop", zdy_item_drop),
+                (drop_list = zdy_item_drop.split(",")));
+            }),
+            $("#store_fenjie_info").change(function () {
+              ((zdy_item_fenjie = $("#store_fenjie_info").val()),
+                GM_setValue(roleid + "_zdy_item_fenjie", zdy_item_fenjie),
+                (fenjie_list = zdy_item_fenjie.split(",")));
+            }),
+            $("#auto_command").change(function () {
+              ((auto_command = $("#auto_command").val()),
+                GM_setValue(roleid + "_auto_command", auto_command));
+            }),
+            $("#blacklist").change(function () {
+              ((blacklist = $("#blacklist").val()),
+                GM_setValue(roleid + "_blacklist", blacklist));
+            }),
+            $("#welcome").focusout(function () {
+              ((welcome = $("#welcome").val()),
+                GM_setValue(roleid + "_welcome", welcome));
+            }),
+            $("#shieldswitch").click(function () {
+              ((shieldswitch = WG.switchReversal($(this))),
+                GM_setValue("_shieldswitch", shieldswitch),
+                "开" == shieldswitch && messageAppend("已注入屏蔽系统", 0, 1));
+            }),
+            $("#zdyskillsswitch").click(function () {
+              ((zdyskills = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_zdyskills", zdyskills),
+                "开" == zdyskills &&
+                  messageAppend(
+                    "已开启自定义技能顺序，填写顺序后，请刷新游戏生效",
+                    0,
+                    1,
+                  ));
+            }),
+            $("#zdyskilllist").change(function () {
+              JSON.parse($("#zdyskilllist").val());
+              if ((!1) instanceof Array) return (alert("无效的输入"), !1);
+              ((zdyskilllist = $("#zdyskilllist").val()),
+                GM_setValue(roleid + "_zdyskilllist", zdyskilllist));
+            }),
+            $("#silence").click(function () {
+              ((silence = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_silence", silence),
+                "开" == silence && messageAppend("已开启安静模式", 0, 1));
+            }),
+            $("#dpssakada").click(function () {
+              ((dpssakada = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_dpssakada", dpssakada),
+                "开" == dpssakada && messageAppend("已开启战斗统计", 0, 1));
+            }),
+            $("#funnycalc").click(function () {
+              ((funnycalc = WG.switchReversal($(this))),
+                GM_setValue(roleid + "_funnycalc", funnycalc),
+                "开" == funnycalc && messageAppend("已开启FUNNY计算", 0, 1));
+            }),
+            $("#shield").focusout(function () {
+              ((shield = $("#shield").val()), GM_setValue("_shield", shield));
+            }),
+            $("#shieldkey").focusout(function () {
+              ((shieldkey = $("#shieldkey").val()),
+                GM_setValue("_shieldkey", shieldkey));
+            }),
+            $("#statehml").change(function () {
+              ((statehml = $("#statehml").val()),
+                GM_setValue(roleid + "_statehml", statehml));
+            }),
+            $("#backimageurl").change(function () {
+              ((backimageurl = $("#backimageurl").val()),
+                GM_setValue(roleid + "_backimageurl", backimageurl),
+                "" != backimageurl &&
+                  (WG.SendCmd("setting backcolor none"),
+                  GM_addStyle(`body{
+              background-color:rgb(0,0,0,.25)
+                }
+                div{
+                    opacity:1;
+                }
+                html{
+                background:rgba(255,255,255,0.25);
+                background-image:url('${backimageurl}');
+                background-repeat:no-repeat;
+                background-size:100% 100%;
+                -moz-background-size:100% 100%;
+            }
+            `)));
+            }),
+            $("#loginhml").change(function () {
+              ((loginhml = $("#loginhml").val()),
+                GM_setValue(roleid + "_loginhml", loginhml));
+            }),
+            $("#autobuy").change(function () {
+              ((auto_buylist = $("#autobuy").val()),
+                GM_setValue(roleid + "_auto_buylist", auto_buylist));
+            }),
+            $("#autoSkillPaperSell").change(function () {
+              ((auto_skillPaperSelllist = $("#autoSkillPaperSell").val()),
+                GM_setValue(
+                  roleid + "_auto_skillPaperSelllist",
+                  auto_skillPaperSelllist,
+                ));
+            }),
+            $(".update_id_all").on("click", WG.update_id_all),
+            $(".clean_id_all").on("click", WG.clean_id_all),
+            $(".update_store").on("click", WG.update_store),
+            $(".backup_btn").on("click", WG.make_config),
+            $(".load_btn").on("click", WG.load_config),
+            $(".clean_dps").on("click", WG.clean_dps),
+            $(".clear_skillJson").on("click", () => {
+              (messageAppend("已关闭自定义，请刷新重新获取技能数据!"),
+                (zdyskills = "关"),
+                GM_setValue(roleid + "_zdyskilllist", ""),
+                GM_setValue(roleid + "_zdyskills", zdyskills));
+            }),
+            $(".savebtn").on("click", function () {
+              var e,
+                t = [];
+              for (e of keyitem) {
+                var s = { name: "无", send: "" },
+                  o = $("#name" + e).val(),
+                  a = $("#send" + e).val();
+                ("" != o && ((s.name = o), (s.send = a)), t.push(s));
+              }
+              ((zdy_btnlist = t),
+                GM_setValue(roleid + "_zdy_btnlist", zdy_btnlist),
+                messageAppend("保存自定义按钮成功"),
+                WG.zdy_btnListInit());
+            }),
+            $("#family").val(family),
+            $("#wudao_pfm").val(wudao_pfm),
+            $("#sm_loser").val(sm_loser),
+            $("#sm_any").val(sm_any),
+            $("#sm_price").val(sm_price),
+            $("#sm_getstore").val(sm_getstore),
+            $("#ks_pfm").val(ks_pfm),
+            $("#ks_wait").val(ks_wait),
+            $("#marry_kiss").val(automarry),
+            $("#ks_Boss").val(autoKsBoss),
+            $("#auto_eq").val(autoeq),
+            $("#autopfmswitch").val(auto_pfmswitch),
+            $("#autopfmmode").val(auto_pfm_mode),
+            $("#autorewardgoto").val(auto_rewardgoto),
+            $("#busyinfo").val(busy_info),
+            $("#saveAddr").val(saveAddr),
+            $("#autoupdateStore").val(auto_updateStore),
+            $("#autorelogin").val(auto_relogin),
+            $("#zmlshowsetting").val(zmlshowsetting),
+            $("#bagFull").val(bagFull),
+            $("#pushSwitch").val(pushSwitch),
+            $("#pushType").val(pushType),
+            $("#pushToken").val(pushToken),
+            $("#color_select").val(color_select),
+            $("#getitemShow").val(getitemShow),
+            $("#unauto_pfm").val(unauto_pfm),
+            $("#store_info").val(zdy_item_store),
+            $("#store_info2").val(zdy_item_store2),
+            $("#lock_info").val(zdy_item_lock),
+            $("#store_drop_info").val(zdy_item_drop),
+            $("#store_fenjie_info").val(zdy_item_fenjie),
+            $("#auto_command").val(auto_command),
+            $("#blacklist").val(blacklist),
+            $("#welcome").val(welcome),
+            $("#shieldswitch").val(shieldswitch),
+            $("#silence").val(silence),
+            $("#dpssakada").val(dpssakada),
+            $("#funnycalc").val(funnycalc),
+            $("#shield").val(shield),
+            $("#shieldkey").val(shieldkey),
+            $("#statehml").val(statehml),
+            $("#backimageurl").val(backimageurl),
+            $("#loginhml").val(loginhml),
+            $("#autobuy").val(auto_buylist),
+            $("#autoSkillPaperSell").val(auto_skillPaperSelllist),
+            $("#zdyskillsswitch").val(zdyskills),
+            $("#zdyskilllist").val(zdyskilllist),
+            ["Q", "W", "E", "R", "T", "Y"]),
+          item;
+        let zdybtni = 0;
+        for (item of keyitem)
+          ($("#name" + item).val(zdy_btnlist[zdybtni].name),
+            $("#send" + item).val(zdy_btnlist[zdybtni].send),
+            (zdybtni += 1));
+        for (let w = $(".setting>.setting-item2"), t = 0; t < w.length; t++) {
+          var s = $(w[t]),
+            i = s.attr("for"),
+            n;
+          if (i) {
+            syncAutomationStaticDataFromService();
+            try {
+              n = eval(i);
+            } finally {
+              syncAutomationStaticDataToService();
+            }
+          }
+          "开" == n &&
+            (s.find(".switch2").addClass("on"),
+            s.find(".switch-text").html("开"));
+        }
+      },
+      runLoginhml: function () {
+        WG.SendCmd(loginhml);
+      },
+      selectLowKongfu: function (c = 0) {
+        ((WG.gpSkill_hook = WG.add_hook("dialog", (e) => {
+          if (e.dialog && "skills" == e.dialog && e.items && null != e.items) {
+            var t,
+              s = "jh fam 0 start,go west,go west,go north,go enter,go west,",
+              o = "",
+              a = "",
+              i = "wakuang",
+              n = (G.isGod() && (i = "xiulian"), []),
+              l = [],
+              d = c,
+              r = ((0 != c && !isNaN(c)) || (d = e.limit), 0),
+              m = [];
+            for (t of e.items) {
+              if (5 < r) break;
+              (t.enable_skill && m.push(t.enable_skill),
+                (WG.inArray(t.id, m) || 0 <= t.name.indexOf("基本")) &&
+                  parseInt(t.level) < parseInt(d) &&
+                  ((o += `lianxi ${t.id} ${d},`),
+                  r < 4 && ((a += `lianxi ${t.id} ${d},`), l.push(t.name)),
+                  n.push(t.name),
+                  r++));
+            }
+            (("setting auto_work " + s + o + i).length <= 200
+              ? (WG.Send("setting auto_work " + s + o + i),
+                messageAppend("添加" + n.join(",") + "到" + d))
+              : (WG.Send("setting auto_work " + s + a + i),
+                messageAppend("添加" + l.join(",") + "到" + d)),
+              messageAppend("添加成功,数据刷新后显示"),
+              WG.remove_hook(WG.gpSkill_hook),
+              (WG.gpSkill_hook = void 0));
+          }
+        })),
+          KEY.do_command("skills"),
+          KEY.do_command("skills"),
+          WG.Send("cha"));
+      },
+      silentResponseMatchers: [],
+      suppressNextResponse: function (matcher, timeout) {
+        if (typeof matcher != "function") return;
+        WG.silentResponseMatchers.push({
+          matcher: matcher,
+          expiresAt: Date.now() + (Number(timeout) || 5000),
+        });
+      },
+      consumeSilentResponse: function (event) {
+        var now = Date.now();
+        for (
+          var index = WG.silentResponseMatchers.length - 1;
+          index >= 0;
+          index--
+        ) {
+          var pending = WG.silentResponseMatchers[index];
+          if (!pending || pending.expiresAt < now) {
+            WG.silentResponseMatchers.splice(index, 1);
+            continue;
+          }
+          try {
+            if (pending.matcher(event)) {
+              WG.silentResponseMatchers.splice(index, 1);
+              return true;
+            }
+          } catch (error) {
+            console.error("silent response matcher error", error);
+            WG.silentResponseMatchers.splice(index, 1);
+          }
+        }
+        return false;
+      },
+      hooks: [],
+      hook_index: 0,
+      add_hook: function (e, t) {
+        e = { index: WG.hook_index++, types: e, fn: t };
+        return (WG.hooks.push(e), e.index);
+      },
+      remove_hook: function (e) {
+        for (var t = 0; t < this.hooks.length; t++)
+          this.hooks[t].index == e && this.hooks.baoremove(t);
+      },
+      run_hook: function (e, t) {
+        for (var s = 0; s < this.hooks.length; s++)
+          try {
+            var o = this.hooks[s];
+            (o.types == t.type ||
+              (o.types instanceof Array && 0 <= $.inArray(t.type, o.types))) &&
+              o.fn(t);
+          } catch (e) {
+            console.error("hook error", e);
+          }
+      },
+      receive_message: function (t) {
+        if (t && t.data) {
+          var s,
+            e,
+            o,
+            a = function (e) {
+              var t,
+                s = {};
+              for (t in e) s[t] = "object" == typeof e[t] ? a(e[t]) : e[t];
+              return s;
+            };
+          if (
+            ((s =
+              "{" == t.data[0] || "[" == t.data[0]
+                ? new Function("return " + t.data + ";")()
+                : { type: "text", msg: t.data }),
+            G.cmd_echo && "time" != s.type && console.log(s),
+            G.yaotaFlag &&
+              "string" == typeof s.msg &&
+              0 <= (i = s.msg).indexOf("一股奇异的能量涌入你的体内，你获得") &&
+              ((G.yaoyuan = G.yaoyuan + parseInt(i.replace(/[^0-9]/gi, ""))),
+              $("#yt_prog").html(
+                "<hiy>目前已获得 " + G.yaoyuan + " 妖元</hiy>",
+              ),
+              261 == G.yaoyuan) &&
+              $("#yt_prog").html(
+                "<hiy>目前已获得 " + G.yaoyuan + " 妖元，boss出现！</hiy>",
+              ),
+            "开" == silence)
+          ) {
+            if ("state" == s.type)
+              if (null == s.silence)
+                if (s.desc != [])
+                  return (
+                    (s.desc = []),
+                    (s.silence = 1),
+                    ((i = a(t)).data = JSON.stringify(s)),
+                    WG.run_hook(s.type, s),
+                    void ws_on_message.apply(this, [i])
+                  );
+            if ("text" == s.type) {
+              var i = s.msg.split(
+                /.*造成<wht>|.*造成<hir>|<\/wht>点|<\/hir>点/,
+              );
+              if (i[2])
+                return (
+                  (n = i[2].split(/伤害|\(|</)),
+                  messageAppend(
+                    `造成<wht>${i[1]}</wht>点<hir>${n[0]}</hir>伤害！`,
+                    0,
+                    1,
+                  ),
+                  void WG.run_hook(s.type, s)
+                );
+            }
+          }
+          if ("msg" == s.type && "开" == shieldswitch) {
+            if (
+              null != shield &&
+              (0 <= shield.indexOf(s.name) || 0 <= shield.indexOf(s.uid))
+            )
+              return;
+            for (e of shieldkey.split(","))
+              if ("" != e && 0 <= s.content.indexOf(e)) return;
+          }
+          if ("text" == s.type)
+            if ("开" == shieldswitch)
+              for (o of shieldkey.split(","))
+                if ("" != o && 0 <= s.msg.indexOf(o)) return;
+          if ("dialog" == s.type && "fam" == s.t && null == s.k)
+            if (null != UI.toui[s.index])
+              return (
+                (s.desc += "\n"),
+                (s.desc += UI.toui[s.index]),
+                (s.k = "knva"),
+                ((i = a(t)).data = JSON.stringify(s)),
+                WG.run_hook(s.type, s),
+                void ws_on_message.apply(this, [i])
+              );
+          if (WG.captureEquipmentPickerResponse(s)) return;
+          if (WG.consumeSilentResponse(s)) {
+            WG.run_hook(s.type, s);
+            return;
+          }
+          if (
+            ("text" == s.type &&
+              "什么？" == s.msg &&
+              null != G.wsdelaySetTime &&
+              (G.wsdelaySetCount <= 3
+                ? ((G.wsdelaySetCount += 1),
+                  (G.wsdelay =
+                    null == G.wsdelay
+                      ? new Date().getTime() - G.wsdelaySetTime
+                      : (new Date().getTime() - G.wsdelaySetTime + G.wsdelay) /
+                        2),
+                  (G.wsdelaySetTime = new Date().getTime()),
+                  WG.SendCmd("test"))
+                : ((G.wsdelay =
+                    (new Date().getTime() - G.wsdelaySetTime + G.wsdelay) / 2),
+                  WG.SendCmd(
+                    "tm 服务器到本地来回延迟约 " + G.wsdelay + " 毫秒",
+                  ),
+                  (G.wsdelaySetTime = void 0),
+                  (G.wsdelaySetCount = void 0))),
+            "dialog" == s.type && "fb" == s.t && null == s.k)
+          )
+            ((s.desc += "\n"),
+              (s.desc += UI.fbui(fb_path[s.index], s.is_multi, s.is_diffi)),
+              (s.k = "knva"),
+              ((n = a(t)).data = JSON.stringify(s)),
+              WG.run_hook(s.type, s),
+              ws_on_message.apply(this, [n]));
+          else if (
+            "dialog" == s.type &&
+            "pack" == s.dialog &&
+            "item" == s.from &&
+            null == s.k
+          )
+            ((i = s.desc.split("\n")[0]),
+              (s.desc += "\n"),
+              (s.desc += UI.itemui(i)),
+              (s.k = "knva"),
+              ((n = a(t)).data = JSON.stringify(s)),
+              WG.run_hook(s.type, s),
+              ws_on_message.apply(this, [n]));
+          else {
+            if ("perform" == s.type)
+              if ("开" == zdyskills)
+                return (
+                  (zdyskilllist = GM_getValue(
+                    roleid + "_zdyskilllist",
+                    zdyskilllist,
+                  )),
+                  (s.skills = JSON.parse(zdyskilllist)),
+                  ((i = a(t)).data = JSON.stringify(s)),
+                  WG.run_hook(s.type, s),
+                  void ws_on_message.apply(this, [i])
+                );
+            if (
+              "cmds" == s.type &&
+              unsafeWindow &&
+              unsafeWindow.ToRaid &&
+              0 <= JSON.stringify(s.items).indexOf("进入副本")
+            ) {
+              var n = s.items[0].cmd;
+              let e = "";
+              e = 0 <= n.indexOf("1 0") ? n.replaceAll("1 0", "1") : n + " 0";
+              ((i = { name: "扫荡指定次数" }),
+                (i =
+                  ((i.cmd = `@js ($sdnum) =prompt("请输入次数,注意:若副本掉落物品过多,请不要输入超过50次,否则可能号没了","10")
+                                    [if] (sdnum)!=null
+                                      ${e} (sdnum)`),
+                  s.items.push(i),
+                  { name: "偷渡指定次数" })),
+                (n =
+                  ((i.cmd = `@js ($sdnum) =prompt("请输入次数","10")
+                                    [if] (sdnum)!=null
+                                      [while] (sdnum) !=0
+                                        ($sdnum) = (sdnum)-1
+                                        ${n}
+                                        cr over`),
+                  s.items.push(i),
+                  a(t))));
+              ((n.data = JSON.stringify(s)),
+                WG.run_hook(s.type, s),
+                void ws_on_message.apply(this, [n]));
+            } else if (
+              ("dialog" == s.type &&
+                "pack" == s.dialog &&
+                s.name &&
+                !(function autoUse(o) {
+                  if (
+                    /养精丹|朱果|潜灵果|背包扩充石|小箱子|师门补给包|随从礼包|技能重置包/.test(
+                      o.name,
+                    )
+                  ) {
+                    let t = ["stopstate"];
+                    var a = o.count;
+                    let s = "use";
+                    /小箱子|师门补给包|随从礼包|技能重置包/.test(o.name) &&
+                      (s = "open");
+                    for (let e = 0; e < a; e++)
+                      t.push(`$wait 250;${s} ` + o.id);
+                    $(".content-message pre").append(
+                      $(
+                        `<div class="item-commands"><span class="autouse">使用 ${o.name} ${a}次</span></div>`,
+                      ).click(() => WG.SendCmd(t)),
+                    );
+                  }
+                })(s),
+              "room" != s.type || /桃花岛|慈航静斋/.test(s.name))
+            )
+              (WG.run_hook(s.type, s),
+                ws_on_message.apply(this, arguments),
+                unsafeWindow.funny &&
+                  null != unsafeWindow.funny.API &&
+                  unsafeWindow.funny.API.onmessage(t));
+            else {
+              let e = s.desc;
+              (30 < e.length &&
+                ((n = (i = e.replace(/<([^<]+)>/g, "")).substr(0, 30)),
+                i.substr(30),
+                (s.desc = `<span id="show">${n} <hic>»»»</hic></span><span id="more" style="display:none">${i}</span><span id="hide" style="display:none"> <hiy>«««</hiy></span>`)),
+                e.includes("cmd") &&
+                  ((e = (e = (e = (e = (e = e.replace(
+                    "<hig>椅子</hig>",
+                    "椅子",
+                  )).replace(
+                    "<CMD cmd='look men'>门(men)</CMD>",
+                    "<cmd cmd='look men'>门</cmd>",
+                  )).replace(/span/g, "cmd")).replace(/"/g, "'")).replace(
+                    /\((.*?)\)/g,
+                    "",
+                  )),
+                  console.log("desc" + e),
+                  (n = e.match(/<cmd cmd='([^']+)'>([^<]+)<\/cmd>/g)),
+                  console.log("cmds：" + n),
+                  n.forEach((e) => {
+                    e = e.match(/<cmd cmd='(.*)'>(.*)<\/cmd>/);
+                    s.commands.unshift({
+                      cmd: e[1],
+                      name: `<hic>${e[2]}</hic>`,
+                    });
+                  }),
+                  n.forEach((e) => (s.desc = `<hic>${e}</hic>　` + s.desc))));
+              i = a(t);
+              ((i.data = JSON.stringify(s)),
+                WG.run_hook(s.type, s),
+                ws_on_message.apply(this, [i]),
+                $("#show").click(() => {
+                  ($("#more").show(), $("#show").hide(), $("#hide").show());
+                }),
+                void $("#hide").click(() => {
+                  ($("#more").hide(), $("#show").show(), $("#hide").hide());
+                }));
+            }
+          }
+        }
+      },
+    },

@@ -1,0 +1,67 @@
+/**
+ * WSMUD game client.
+ *
+ * The original string table and decoder wrappers were statically resolved.
+ * Existing public API names are intentionally retained because feature scripts
+ * call them directly at runtime.
+ */
+"use strict";
+
+const clientViewStorage = unsafeWindow.WSMudClient.createModule(
+  "view-storage",
+  {
+    jquery: $,
+    hostWindow: window,
+    storage: localStorage,
+    logger: console,
+  },
+);
+var HideAndShow = clientViewStorage.hideAndShow,
+  initIos = clientViewStorage.initIos,
+  showNews = clientViewStorage.showNews;
+const storageUtil = clientViewStorage.storageUtil;
+
+$(function () {
+  $(".login-content").on("click", ".panel_item", LoginCommand);
+  $(".container").on("click", ContainerCommand);
+  $(".role-list").on("click", ".role-item", function () {
+    $(this).parent().find(".select").removeClass("select");
+    $(this).addClass("select");
+  });
+  $(".channel-box").on("click", "span", ChannelChanged);
+  $(".combat-commands")
+    .on("click", ".pfm-item", Combat.Perform)
+    .on("wheel", Combat.Scroll);
+  $(".room-commands").on("wheel", Combat.Scroll);
+  $(".sender-box").on("keyup", OnSendBoxKeyDown);
+  $(".room_items").on("click", ".room-item", Process.selectItem);
+  $(".bottom-bar").on(
+    "click",
+    ".tool-item,.state-bar,.item-command",
+    MenuClick,
+  );
+  $(".sender-btn").on("click", SendChatMessage);
+  $(".room_exits")
+    .on("pointerdown", Process.before_click_exits)
+    .on("pointerup", Process.click_exits);
+  $(".room-title>.map-icon")
+    .attr({
+      role: "button",
+      tabindex: "0",
+      "aria-haspopup": "dialog",
+      "aria-expanded": "false",
+      "aria-label": "打开地图",
+    })
+    .on("click", function () {
+      MAP.LoadMap();
+    })
+    .on("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        MAP.LoadMap();
+        event.preventDefault();
+      }
+    });
+  $(".validnum-box>.validnum-btn").on("click", SendValidateCode);
+  Process.init();
+  CheckLogin();
+});

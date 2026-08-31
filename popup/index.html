@@ -1,0 +1,289 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --primary-color: #4361ee;
+        --success-color: #4caf50;
+        --danger-color: #f44336;
+        --warning-color: #ff9800;
+        --background-color: #f8f9fa;
+        --card-background: #ffffff;
+        --text-primary: #333333;
+        --text-secondary: #666666;
+        --border-color: #e0e0e0;
+        --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        --border-radius: 8px;
+      }
+
+      body {
+        width: 320px;
+        padding: 20px;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: var(--background-color);
+        margin: 0;
+        color: var(--text-primary);
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .header h2 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--primary-color);
+      }
+
+      .card {
+        background: var(--card-background);
+        border-radius: var(--border-radius);
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .card-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+      }
+
+      .card-title i {
+        margin-right: 8px;
+        color: var(--primary-color);
+      }
+
+      .switch-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px;
+        background-color: rgba(67, 97, 238, 0.05);
+        border-radius: var(--border-radius);
+        border: 1px solid rgba(67, 97, 238, 0.1);
+      }
+
+      .switch-label {
+        font-weight: 500;
+        font-size: 15px;
+      }
+
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 52px;
+        height: 26px;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.4s;
+        border-radius: 26px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 20px;
+        width: 20px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      input:checked + .slider {
+        background-color: var(--success-color);
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(26px);
+      }
+
+      .qr-section {
+        text-align: center;
+      }
+
+      .qr-code {
+        max-width: 180px;
+        height: auto;
+        margin: 15px auto;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 10px;
+        background: white;
+      }
+
+      .donate-text {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 10px 0;
+        line-height: 1.5;
+      }
+
+      .status {
+        text-align: center;
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-top: 15px;
+        padding: 12px;
+        border-radius: var(--border-radius);
+        background-color: rgba(67, 97, 238, 0.05);
+      }
+
+      .enabled {
+        color: var(--success-color);
+        font-weight: 600;
+      }
+
+      .disabled {
+        color: var(--danger-color);
+        font-weight: 600;
+      }
+
+      .data-section {
+        text-align: center;
+      }
+
+      .data-section button {
+        margin: 8px 4px;
+        padding: 10px 18px;
+        font-size: 14px;
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        background-color: var(--primary-color);
+        color: white;
+        min-width: 100px;
+      }
+
+      .data-section button:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(67, 97, 238, 0.2);
+      }
+
+      .data-section button#importBtn {
+        background-color: #6c757d;
+      }
+
+      .data-section button#exportBtn {
+        background-color: var(--success-color);
+      }
+
+      .footer {
+        text-align: center;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      .status-enabled {
+        background-color: var(--success-color);
+      }
+
+      .status-disabled {
+        background-color: var(--danger-color);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h2>WSMudEX</h2>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">
+        <span>🔌 插件控制</span>
+      </h3>
+      <div class="switch-container">
+        <span class="switch-label">插件状态</span>
+        <label class="switch">
+          <input type="checkbox" id="toggleSwitch" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="status" id="statusText">
+        当前状态:
+        <span id="status">
+          <span class="status-indicator status-enabled"></span>
+          <span class="enabled">运行中</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- 数据导入导出 -->
+    <div class="card">
+      <h3 class="card-title">
+        <span>💾 数据管理</span>
+      </h3>
+      <div class="data-section">
+        <button id="exportBtn">导出配置</button>
+        <input
+          type="file"
+          id="importInput"
+          accept=".json"
+          style="display: none"
+        />
+        <button id="importBtn">导入配置</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">
+        <span>❤️ 支持开发</span>
+      </h3>
+      <div class="qr-section">
+        <div class="donate-text">如果觉得好用，请作者喝杯咖啡吧！</div>
+        <img
+          class="qr-code"
+          id="qrCode"
+          src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjkwIiB5PSI5MCIgZm9udC1zaXplPSIxOCIgZm9udC1mYW1pbHk9IkFyaWFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5RUiBDT0RFPC90ZXh0Pjwvc3ZnPg=="
+          alt="收款码"
+        />
+        <div class="donate-text">扫码捐赠</div>
+      </div>
+    </div>
+
+    <div class="footer">v1.0.0 | WSMudEX</div>
+
+    <script src="controller.js"></script>
+  </body>
+</html>

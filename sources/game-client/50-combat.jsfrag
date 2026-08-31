@@ -1,0 +1,13 @@
+var Warn = unsafeWindow.WSMudClient.createModule("warnings", {
+  jquery: $,
+  hostWindow: window,
+});
+var Combat = unsafeWindow.WSMudClient.createModule("combat", {
+  jquery: $,
+  hostWindow: window,
+  timers: window,
+  getSendCommand: function () { return SendCommand; },
+  getSetting: function () { return Setting; },
+  getProcess: function () { return Process; },
+  getDialog: function () { return Dialog; },
+});

@@ -1,0 +1,19 @@
+const ClientUtilities = unsafeWindow.WSMudClient.createModule("utilities", {
+  jquery: $,
+  hostWindow: window,
+  documentRef: document,
+  navigator,
+  timers: { setTimeout },
+  json: JSON,
+  DateConstructor: Date,
+  PromiseConstructor: Promise,
+  parseInt,
+  encodeURIComponent,
+  escape,
+  unescape,
+  FunctionConstructor: Function,
+  domParser: typeof DOMParser === "function" ? DOMParser : null,
+  activeXObject: typeof ActiveXObject === "function" ? ActiveXObject : null,
+});
+ClientUtilities.installLegacyExtensions();
+var Util = ClientUtilities;

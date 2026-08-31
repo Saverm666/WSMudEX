@@ -1,0 +1,13 @@
+const ClientDialogJianghu = unsafeWindow.WSMudClient.createModule(
+  "dialog-jianghu",
+  {
+    getDialog: () => Dialog,
+    jquery: $,
+    getSendCommand: () => SendCommand,
+    getReceiveMessage: () => ReceiveMessage,
+  },
+);
+Dialog.jh_fam = ClientDialogJianghu.jh_fam;
+Dialog.jh_fb = ClientDialogJianghu.jh_fb;
+Dialog.jh_ar = ClientDialogJianghu.jh_ar;
+Dialog.jh = ClientDialogJianghu.jh;

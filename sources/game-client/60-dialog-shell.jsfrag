@@ -1,0 +1,650 @@
+var Touch = unsafeWindow.WSMudClient.createModule("touch", {
+  documentRef: document,
+});
+const Dialog = {
+  isShow: false,
+  curItem: null,
+  layerStack: [],
+  pendingLayerRequests: [],
+  show: function (_0x5ecb78, _0xb973d1) {
+    if (!_0x5ecb78) {
+      return;
+    }
+    if (!_0xb973d1) {
+      var pendingLayer = this.peekLayerRequest();
+      if (
+        pendingLayer &&
+        this.isShow &&
+        pendingLayer.sourceItem == this.curItem &&
+        _0x5ecb78 != this.curItem
+      ) {
+        pendingLayer = this.consumeLayerRequest();
+        this.pushLayer(_0x5ecb78, pendingLayer);
+      }
+      if (this.isShow && _0x5ecb78 == this.curItem) {
+        if (this.processingPayload) return;
+        return this.hide();
+      }
+      if (this.curItem && _0x5ecb78 != this.curItem) {
+        Process.cancelPendingDetailPopups && Process.cancelPendingDetailPopups();
+        this.saveSkillsWindowGeometry();
+        if (Dialog[Dialog.curItem].close) {
+          Dialog[Dialog.curItem].close();
+        }
+        Dialog[Dialog.curItem].isShow = false;
+        Dialog.contentElement.empty();
+      }
+      this.init();
+      this.curItem = _0x5ecb78;
+      this.activateFloatingDialog();
+      this[_0x5ecb78].show(_0xb973d1);
+      Process.message.scroll2end();
+    } else {
+      this[_0x5ecb78].onData(_0xb973d1);
+    }
+  },
+  select: function (_0x23b6a8) {
+    if (this.isShow && _0x23b6a8 == this.curItem) {
+      return this.hide();
+    }
+    if (this.curItem && _0x23b6a8 != this.curItem) {
+      this.saveSkillsWindowGeometry();
+      if (Dialog[Dialog.curItem].close) {
+        Dialog[Dialog.curItem].close();
+      }
+      Dialog[Dialog.curItem].isShow = false;
+      Dialog.contentElement.empty();
+    }
+    this.init();
+    this.curItem = _0x23b6a8;
+    this.activateFloatingDialog();
+  },
+  init: function () {
+    if (this.isShow) {
+      return;
+    }
+    if (!this.isInit) {
+      this.contentElement = $(".dialog>.dialog-content");
+      this.titleElement = $(".dialog>.dialog-header>.dialog-title");
+      this.iconElement = $(".dialog>.dialog-header>.dialog-icon");
+      this.footerElement = $(".dialog>.dialog-footer").on(
+        "click",
+        ".footer-item",
+        Dialog.footerClick,
+      );
+      this.hiddenElement = $(".hidden-item");
+      this.element = $(".dialog");
+      $(".dialog>.dialog-header>.dialog-close").on("click", Dialog.hide);
+      $(document)
+        .off("keydown.WG_floating_dialog")
+        .on("keydown.WG_floating_dialog", function (event) {
+          if (
+            event.key === "Escape" &&
+            Dialog.isShow &&
+            Dialog.element.hasClass("WG_floating_dialog") &&
+            IsTopWGPopupLayer(Dialog.element)
+          ) {
+            Dialog.hide();
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+      this.isInit = true;
+    }
+    $(".content-room").addClass("hide");
+    this.element.removeClass("hide");
+    this.isShow = true;
+  },
+  skillsWindowGeometryKey: "WG_skills_window_geometry",
+  getFloatingDialogGeometryKey: function () {
+    return "WG_floating_dialog_geometry_" + (this.curItem || "default");
+  },
+  initSkillsWindow: function () {
+    if (this.skillsWindowInitialized || !this.element || !this.element.length) {
+      return;
+    }
+    this.skillsWindowInitialized = true;
+    var header = this.element.children(".dialog-header"),
+      dragState = null;
+    header
+      .off(".WG_skills_window_drag")
+      .on("pointerdown.WG_skills_window_drag", function (event) {
+        if ($(event.target).closest(".dialog-close").length) return;
+        var pointerEvent = event.originalEvent;
+        if (pointerEvent.button != null && pointerEvent.button !== 0) return;
+        var rect = Dialog.element[0].getBoundingClientRect();
+        dragState = {
+          pointerId: pointerEvent.pointerId,
+          startX: pointerEvent.clientX,
+          startY: pointerEvent.clientY,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+        header.addClass("WG_dragging");
+        this.setPointerCapture && this.setPointerCapture(pointerEvent.pointerId);
+        event.preventDefault();
+      })
+      .on("pointermove.WG_skills_window_drag", function (event) {
+        var pointerEvent = event.originalEvent;
+        if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
+        Dialog.applySkillsWindowGeometry(
+          {
+            left: dragState.left + pointerEvent.clientX - dragState.startX,
+            top: dragState.top + pointerEvent.clientY - dragState.startY,
+            width: dragState.width,
+            height: dragState.height,
+          },
+          false,
+        );
+        event.preventDefault();
+      })
+      .on(
+        "pointerup.WG_skills_window_drag pointercancel.WG_skills_window_drag",
+        function (event) {
+          var pointerEvent = event.originalEvent;
+          if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
+          header.removeClass("WG_dragging");
+          dragState = null;
+          Dialog.saveSkillsWindowGeometry();
+        },
+      );
+    if (window.ResizeObserver) {
+      this.skillsWindowResizeObserver = new ResizeObserver(function () {
+        if (!Dialog.element.hasClass("WG_floating_dialog")) return;
+        Dialog.clampSkillsWindowGeometry();
+        Dialog.positionSkillsConfirm();
+        clearTimeout(Dialog.skillsWindowSaveTimer);
+        Dialog.skillsWindowSaveTimer = setTimeout(function () {
+          Dialog.saveSkillsWindowGeometry();
+        }, 120);
+      });
+      this.skillsWindowResizeObserver.observe(this.element[0]);
+    }
+    $(window)
+      .off("resize.WG_skills_window")
+      .on("resize.WG_skills_window", function () {
+        if (Dialog.element.hasClass("WG_floating_dialog")) {
+          Dialog.clampSkillsWindowGeometry();
+          Dialog.positionSkillsConfirm();
+        }
+      });
+  },
+  applySkillsWindowGeometry: function (geometry, persist) {
+    if (!this.element || !this.element.length) return;
+    var margin = 10,
+      maxWidth = Math.max(1, window.innerWidth - margin * 2),
+      maxHeight = Math.max(1, window.innerHeight - margin * 2),
+      width = Math.max(Math.min(520, maxWidth), Math.min(Number(geometry.width) || 960, maxWidth)),
+      height = Math.max(Math.min(360, maxHeight), Math.min(Number(geometry.height) || 720, maxHeight)),
+      left = Math.max(margin, Math.min(Number(geometry.left) || margin, window.innerWidth - width - margin)),
+      top = Math.max(margin, Math.min(Number(geometry.top) || margin, window.innerHeight - height - margin));
+    this.element.css({
+      left: left + "px",
+      top: top + "px",
+      width: width + "px",
+      height: height + "px",
+      transform: "none",
+    });
+    this.positionSkillsConfirm();
+    persist && this.saveSkillsWindowGeometry();
+  },
+  restoreSkillsWindowGeometry: function () {
+    var geometryKey = this.getFloatingDialogGeometryKey(),
+      saved = window.localStorage.getItem(geometryKey),
+      geometry = null;
+    if (saved)
+      try {
+        geometry = JSON.parse(saved);
+      } catch (error) {
+        window.localStorage.removeItem(geometryKey);
+      }
+    if (!geometry) {
+      var mainRect = $(".container")[0].getBoundingClientRect(),
+        layerDepth = (this.layerStack || []).length,
+        width = Math.min(mainRect.width, window.innerWidth - 32),
+        height = Math.min(780, window.innerHeight - 32);
+      geometry = {
+        left: Math.min(
+          mainRect.left + layerDepth * 12,
+          window.innerWidth - width - 16,
+        ),
+        top: (window.innerHeight - height) / 2,
+        width: width,
+        height: height,
+      };
+    }
+    this.applySkillsWindowGeometry(geometry, false);
+  },
+  saveSkillsWindowGeometry: function () {
+    if (!this.element || !this.element.hasClass("WG_floating_dialog")) return;
+    var rect = this.element[0].getBoundingClientRect();
+    window.localStorage.setItem(
+      this.getFloatingDialogGeometryKey(),
+      JSON.stringify({
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }),
+    );
+  },
+  clampSkillsWindowGeometry: function () {
+    if (!this.element || !this.element.hasClass("WG_floating_dialog")) return;
+    var rect = this.element[0].getBoundingClientRect();
+    this.applySkillsWindowGeometry(
+      { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      false,
+    );
+  },
+  activateSkillsWindow: function () {
+    this.activateFloatingDialog();
+  },
+  activateFloatingDialog: function () {
+    if (!IsWGPluginFeatureEnabled("floatingPanels")) {
+      this.element.removeClass("WG_floating_dialog WG_skills_window");
+      $(".content-room").addClass("hide");
+      return;
+    }
+    this.initSkillsWindow();
+    this.element.addClass("WG_floating_dialog");
+    (this.curItem == "skills" || this.curItem == "master") &&
+      this.element.addClass("WG_skills_window");
+    this.element
+      .attr("data-dialog-depth", (this.layerStack || []).length)
+      .css(
+        "--WG-dialog-z",
+        2147483601 + (this.layerStack || []).length * 3,
+      );
+    $(".content-room").removeClass("hide");
+    this.restoreSkillsWindowGeometry();
+  },
+  deactivateSkillsWindow: function () {
+    this.deactivateFloatingDialog();
+  },
+  deactivateFloatingDialog: function () {
+    if (!this.element || !this.element.hasClass("WG_floating_dialog")) return;
+    this.saveSkillsWindowGeometry();
+    if (typeof Confirm !== "undefined" && Confirm.isShow) Confirm.Close();
+    this.element
+      .removeClass("WG_floating_dialog WG_skills_window")
+      .removeAttr("data-dialog-depth")
+      .css({
+        left: "",
+        top: "",
+        width: "",
+        height: "",
+        transform: "",
+        "z-index": "",
+      });
+    this.element[0].style.removeProperty("--WG-dialog-z");
+    $(".dialog-confirm")
+      .removeClass("WG_skills_confirm")
+      .css({ left: "", top: "", width: "", bottom: "" });
+    this.isShow && $(".content-room").addClass("hide");
+  },
+  positionSkillsConfirm: function () {
+    if (
+      !this.element ||
+      !this.element.hasClass("WG_floating_dialog") ||
+      typeof Confirm === "undefined" ||
+      !Confirm.isShow ||
+      !Confirm.element ||
+      !Confirm.element.is(":visible")
+    )
+      return;
+    var rect = this.element[0].getBoundingClientRect(),
+      inset = 12,
+      confirmHeight = Confirm.element.outerHeight() || 96;
+    Confirm.element
+      .addClass("WG_skills_confirm")
+      .css({
+        left: rect.left + inset + "px",
+        top: Math.max(rect.top + 54, rect.bottom - confirmHeight - inset) + "px",
+        width: Math.max(280, rect.width - inset * 2) + "px",
+        bottom: "auto",
+      });
+  },
+  prepareLayerRequest: function (command, sourceElement) {
+    if (!IsWGPluginFeatureEnabled("floatingPanels")) {
+      this.clearLayerRequests();
+      return;
+    }
+    var now = Date.now(),
+      request = {
+        command: String(command || ""),
+        sourceElement: sourceElement.closest("[cmd]")[0] || sourceElement[0],
+        sourceDialog: this.element && this.element[0],
+        sourceItem: this.curItem,
+        createdAt: now,
+      };
+    this.pendingLayerRequests = (this.pendingLayerRequests || []).filter(
+      function (pending) {
+        return now - pending.createdAt <= 2500;
+      },
+    );
+    for (var pending of this.pendingLayerRequests)
+      if (
+        pending.sourceDialog === request.sourceDialog &&
+        pending.sourceItem === request.sourceItem
+      )
+        pending.superseded = true;
+    this.pendingLayerRequests.push(request);
+    if (this.pendingLayerRequests.length > 12)
+      this.pendingLayerRequests.splice(
+        0,
+        this.pendingLayerRequests.length - 12,
+      );
+  },
+  consumeLayerRequest: function (command) {
+    this.peekLayerRequest();
+    var requests = this.pendingLayerRequests || [],
+      index = 0;
+    if (command != null) {
+      index = requests.findIndex(function (pending) {
+        return pending.command == command;
+      });
+      if (index < 0) return null;
+    }
+    return requests.length ? requests.splice(index, 1)[0] : null;
+  },
+  peekLayerRequest: function () {
+    var now = Date.now();
+    this.pendingLayerRequests = (this.pendingLayerRequests || []).filter(
+      function (pending) {
+        return now - pending.createdAt <= 2500;
+      },
+    );
+    return this.pendingLayerRequests[0] || null;
+  },
+  clearLayerRequests: function () {
+    this.pendingLayerRequests = [];
+  },
+  pushLayer: function (nextItem, pending) {
+    if (!this.isShow || !this.element || !this.element.length) return false;
+    this.saveSkillsWindowGeometry();
+    var rect = this.element[0].getBoundingClientRect(),
+      depth = (this.layerStack || []).length,
+      snapshot = this.element.clone(false, false);
+    snapshot
+      .removeClass("dialog WG_floating_dialog WG_skills_window hide")
+      .addClass("WG_dialog_snapshot")
+      .attr({ "aria-hidden": "true", inert: "" })
+      .css({
+        left: rect.left + "px",
+        top: rect.top + "px",
+        width: rect.width + "px",
+        height: rect.height + "px",
+        zIndex: 2147483600 + depth * 3,
+      })
+      .insertBefore(this.element);
+    var frame = {
+      curItem: this.curItem,
+      content: this.contentElement.contents().detach(),
+      title: this.titleElement.contents().detach(),
+      footer: this.footerElement.contents().detach(),
+      iconClass: this.iconElement.attr("class"),
+      geometry: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      snapshot: snapshot,
+      returnFocus: pending && pending.sourceElement,
+    };
+    this.layerStack.push(frame);
+    this.curItem = null;
+    this.isShow = false;
+    this.element.removeClass("WG_skills_window");
+    this.element.addClass("hide");
+    return true;
+  },
+  popLayer: function () {
+    var frame = this.layerStack && this.layerStack.pop();
+    if (!frame) return false;
+    if (this.curItem && this[this.curItem]) this[this.curItem].isShow = false;
+    this.contentElement.contents().detach();
+    this.titleElement.empty();
+    this.footerElement.empty();
+    frame.snapshot.remove();
+    this.contentElement.append(frame.content);
+    this.titleElement.append(frame.title);
+    this.footerElement.append(frame.footer);
+    this.iconElement.attr("class", frame.iconClass || "dialog-icon");
+    this.curItem = frame.curItem;
+    this.isShow = true;
+    this[this.curItem] && (this[this.curItem].isShow = true);
+    this.element.removeClass("hide");
+    this.activateFloatingDialog();
+    this.applySkillsWindowGeometry(frame.geometry, false);
+    frame.returnFocus &&
+      document.documentElement.contains(frame.returnFocus) &&
+      $(frame.returnFocus).trigger("focus");
+    return true;
+  },
+  clearLayerStack: function () {
+    for (var index = this.layerStack.length - 1; index >= 0; index--) {
+      var frame = this.layerStack[index];
+      frame.snapshot && frame.snapshot.remove();
+      this[frame.curItem] && (this[frame.curItem].isShow = false);
+    }
+    this.layerStack = [];
+  },
+  hide: function () {
+    if (
+      Dialog.curItem &&
+      Dialog[Dialog.curItem] &&
+      Dialog[Dialog.curItem].hide &&
+      Dialog[Dialog.curItem].hide() == false
+    ) {
+      return;
+    }
+    Dialog.close();
+  },
+  footerClick: function () {
+    var _0x3791a3 = $(this);
+    if (_0x3791a3.is(".select")) {
+      return;
+    }
+    var _0x4eb39c = _0x3791a3.attr("for");
+    _0x3791a3.parent().find(".select").removeClass("select");
+    _0x3791a3.addClass("select");
+    Dialog[Dialog.curItem].footerChanged(_0x4eb39c, _0x3791a3);
+  },
+  title: function (_0x255583) {
+    Dialog.titleElement.html(_0x255583);
+  },
+  icon: function (_0x32898e) {
+    this.iconElement.attr(
+      "class",
+      "dialog-icon glyphicon glyphicon-" + _0x32898e,
+    );
+  },
+  footer: function (_0xdaa19e) {
+    if (_0xdaa19e) {
+      this.footerElement.html(_0xdaa19e);
+    } else {
+      this.footerElement.empty();
+    }
+  },
+  close: function () {
+    if (!Dialog.isShow) {
+      return;
+    }
+    if (Dialog.layerStack && Dialog.layerStack.length) {
+      return Dialog.popLayer();
+    }
+    Dialog.deactivateFloatingDialog();
+    Dialog.clearLayerRequests();
+    Process.cancelPendingDetailPopups && Process.cancelPendingDetailPopups();
+    Dialog.isShow = false;
+    $(".content-room").removeClass("hide");
+    Dialog.element.addClass("hide");
+    Process.releaseItemPopupSecondary(Dialog.element);
+  },
+  score: {
+    footer: [
+      ["属性", ".dialog-score"],
+      ["详细", ".dialog-score2"],
+      ["称号", ".dialog-titles"],
+    ],
+    selectIndex: 0,
+    onData: function (_0x3ddb88) {
+      console.log(_0x3ddb88);
+      this.data = _0x3ddb88;
+      this.init_elem();
+      Dialog.titleElement.html(_0x3ddb88.name);
+      Dialog.icon("user");
+      if (_0x3ddb88.titles) {
+        this.titles = _0x3ddb88.titles;
+        this.create_titles();
+      } else {
+        if (_0x3ddb88.id && _0x3ddb88.id != this.uid) {
+          this.uid = _0x3ddb88.id;
+          if (this.uid != Process.player) {
+            Dialog.footerElement.find(".footer-item:eq(2)").hide();
+          } else {
+            Dialog.footerElement.find(".footer-item:eq(2)").show();
+          }
+        }
+        var _0x4e64fa = $(
+          _0x3ddb88.name ? this.footer[0][1] : this.footer[1][1],
+        );
+        var _0x3b4542 = _0x4e64fa.find("span");
+        for (var _0x46a5f3 = 0; _0x46a5f3 < _0x3b4542.length; _0x46a5f3++) {
+          var _0xa64fb0 = $(_0x3b4542[_0x46a5f3]);
+          var _0x4688f3 = _0xa64fb0.attr("data-prop");
+          if (_0x4688f3) {
+            _0xa64fb0.html(_0x3ddb88[_0x4688f3] || 0);
+          }
+        }
+      }
+    },
+    init_elem: function () {
+      Dialog.init();
+      Dialog.curItem = "score";
+      if (this.isShow) {
+        return;
+      }
+      Dialog.footer("");
+      for (var _0x27424e = 0; _0x27424e < this.footer.length; _0x27424e++) {
+        var _0xc57e1f = $(
+          "<span class='footer-item " +
+            (this.selectIndex == _0x27424e ? "select" : "") +
+            "' for='" +
+            _0x27424e +
+            "'>" +
+            this.footer[_0x27424e][0] +
+            "</span>",
+        ).appendTo(Dialog.footerElement);
+        this.footer[_0x27424e][1] = $(this.footer[_0x27424e][1]);
+      }
+      this.isShow = true;
+      this.footerChanged(this.selectIndex);
+    },
+    show: function (_0x44b140) {
+      if (_0x44b140) {
+        return;
+      }
+      if (!this.selectIndex) {
+        SendCommand("score");
+      } else if (this.selectIndex == 1) {
+        SendCommand("score2");
+      } else {
+        SendCommand("score title");
+      }
+      this.init_elem();
+    },
+    close: function () {
+      this.footer[this.selectIndex][1].remove();
+      Dialog.footer("");
+      this.isShow = false;
+    },
+    footerChanged: function (_0x59cfe1) {
+      var _0x1b399f = this.data;
+      _0x59cfe1 = parseInt(_0x59cfe1);
+      this.footer[this.selectIndex][1].remove();
+      this.selectIndex = _0x59cfe1;
+      var _0xd72a5a = $(this.footer[this.selectIndex][1]).appendTo(
+        Dialog.contentElement.empty(),
+      );
+      if (_0x59cfe1 == 1) {
+        if (this.uid && Process.player != this.uid) {
+          SendCommand("score2 " + this.uid);
+        } else {
+          SendCommand("score2");
+        }
+      } else if (_0x59cfe1 == 2) {
+        if (!this.titles) {
+          SendCommand("score title");
+        }
+        _0xd72a5a.on(
+          "click",
+          ".btn-noused",
+          function (_0x491e36) {
+            var _0x5d6551 = $(_0x491e36.target);
+            if (_0x5d6551.is("red")) {
+              _0x5d6551 = _0x5d6551.parent();
+            }
+            var _0x46fc4e = parseInt(_0x5d6551.attr("index"));
+            for (
+              var _0x377a93 = 0;
+              _0x377a93 < this.titles.length;
+              _0x377a93++
+            ) {
+              if (_0x377a93 == _0x46fc4e) {
+                this.titles[_0x377a93].use = this.titles[_0x377a93].use
+                  ? false
+                  : true;
+              } else {
+                this.titles[_0x377a93].use = false;
+              }
+            }
+            SendCommand("title " + _0x46fc4e);
+            this.create_titles();
+          }.bind(this),
+        );
+      }
+    },
+    create_titles: function () {
+      var _0x48d53b = $(".dialog-titles");
+      var _0x966a38 = [];
+      for (var _0x33e5b0 = 0; _0x33e5b0 < this.titles.length; _0x33e5b0++) {
+        _0x966a38.push(
+          "<div class='title-item",
+          this.titles[_0x33e5b0].use ? " selected" : "",
+          "'>",
+        );
+        _0x966a38.push(this.titles[_0x33e5b0].title);
+        _0x966a38.push("<span class='btn-noused' index='");
+        _0x966a38.push(_0x33e5b0);
+        _0x966a38.push("'>");
+        _0x966a38.push(this.titles[_0x33e5b0].use ? "<red>取消</red>" : "使用");
+        _0x966a38.push("</span>");
+        _0x966a38.push("</div>");
+      }
+      _0x48d53b.html(
+        _0x966a38.length
+          ? _0x966a38.join("")
+          : "<div class='empty'>你还没有获得任何称号</div>",
+      );
+    },
+  },
+  map: {
+    onData: function (_0x31b79c) {
+      $(".WG_map_modal_title").html(_0x31b79c.title || "地图");
+    },
+    show: function () {
+      Dialog.close();
+      MAP.LoadMap();
+    },
+    hide: function () {
+      MAP.CloseModal();
+    },
+    close: function () {
+      MAP.CloseModal();
+    },
+  },
+};

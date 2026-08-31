@@ -1,0 +1,762 @@
+/** Main player automation suite: UI enhancements, commands and scheduled tasks. */
+!(function () {
+  ((Array.prototype.baoremove = function (e) {
+    if (isNaN(e) || e > this.length) return !1;
+    this.splice(e, 1);
+  }),
+    (Array.prototype.remove = function (e) {
+      e = this.indexOf(e);
+      -1 < e && this.splice(e, 1);
+    }),
+    (String.prototype.replaceAll = function (e, t) {
+      return this.replace(new RegExp(e, "gm"), t);
+    }));
+  var copyToClipboard = function (e) {
+    var t = document.createElement("textarea");
+    ((t.value = e),
+      document.body.appendChild(t),
+      t.select(),
+      document.execCommand("Copy"),
+      t.parentNode.removeChild(t));
+  };
+  let chatContainer = null;
+  function smartAutoScroll() {
+    (chatContainer =
+      chatContainer || document.querySelector(".content-message")) &&
+      chatContainer.scrollHeight -
+        chatContainer.scrollTop -
+        chatContainer.clientHeight <
+        100 &&
+      chatContainer.scrollTo({
+        top: chatContainer.scrollHeight,
+        behavior: "smooth",
+      });
+  }
+  function initObserver() {
+    document.body
+      ? new MutationObserver(function (e) {
+          let o = !1;
+          (e.forEach(function (e) {
+            if ("childList" === e.type && 0 !== e.addedNodes.length) {
+              chatContainer && chatContainer.contains(e.target) && (o = !0);
+            }
+          }),
+            o && smartAutoScroll());
+        }).observe(document.body, { childList: !0, subtree: !0 })
+      : setTimeout(initObserver, 0);
+  }
+  function dateFormat(e, t) {
+    var s,
+      o,
+      a = {
+        "Y+": t.getFullYear().toString(),
+        "m+": (t.getMonth() + 1).toString(),
+        "d+": t.getDate().toString(),
+        "H+": t.getHours().toString(),
+        "M+": t.getMinutes().toString(),
+        "S+": t.getSeconds().toString(),
+      };
+    for (o in a)
+      (s = new RegExp("(" + o + ")").exec(e)) &&
+        (e = e.replace(
+          s[1],
+          1 == s[1].length ? a[o] : a[o].padStart(s[1].length, "0"),
+        ));
+    return e;
+  }
+  function addWan(e, t, s, o) {
+    var e = getDigit(e);
+    return 3 < e
+      ? (5 <= (e = e % 8) && (e = 4),
+        Math.round(t / Math.pow(10, e + s - o)) / Math.pow(10, o) + "万")
+      : Math.round(t / Math.pow(10, s - o)) / Math.pow(10, o);
+  }
+  function getDigit(e) {
+    for (var t = -1; 1 <= e;) (t++, (e /= 10));
+    return t;
+  }
+  function addChineseUnit(e, t) {
+    t = null == t ? 2 : t;
+    var s = Math.floor(e),
+      o = getDigit(s),
+      a = [];
+    if (3 < o) {
+      var i = Math.floor(o / 8);
+      if (1 <= i) {
+        o = Math.round(s / Math.pow(10, 8 * i));
+        a.push(addWan(o, e, 8 * i, t));
+        for (var n = 0; n < i; n++) a.push("亿");
+        return a.join("");
+      }
+      return addWan(s, e, 0, t);
+    }
+    return e;
+  }
+  function getQueryVariable(e) {
+    for (
+      var t = window.location.search.substring(1).split("&"), s = 0;
+      s < t.length;
+      s++
+    ) {
+      var o = t[s].split("=");
+      if (o[0] == e) return o[1];
+    }
+    return !1;
+  }
+  $(document).ready(function () {
+    ((chatContainer = document.querySelector(".content-message")),
+      initObserver());
+  });
+  let show_msg;
+  var CanUse = !1,
+    _ws,
+    ws,
+    ws_on_message,
+    cmd_queue,
+    cmd_busy,
+    echo,
+    _send_cmd,
+    send_cmd,
+    L =
+      (WebSocket
+        ? (console.log("插件可正常运行,Plugins can run normally"),
+          (CanUse = !0),
+          (show_msg = function (e) {
+            ws_on_message({ type: "text", data: e });
+          }),
+          (_ws = WebSocket),
+          (unsafeWindow.WebSocket = function (e) {
+            ws = new _ws(e);
+          }),
+          (unsafeWindow.WebSocket.prototype = {
+            CONNECTING: _ws.CONNECTING,
+            OPEN: _ws.OPEN,
+            CLOSING: _ws.CLOSING,
+            CLOSED: _ws.CLOSED,
+            get url() {
+              return ws.url;
+            },
+            get protocol() {
+              return ws.protocol;
+            },
+            get readyState() {
+              return ws.readyState;
+            },
+            get bufferedAmount() {
+              return ws.bufferedAmount;
+            },
+            get extensions() {
+              return ws.extensions;
+            },
+            get binaryType() {
+              return ws.binaryType;
+            },
+            set binaryType(e) {
+              ws.binaryType = e;
+            },
+            get onopen() {
+              return ws.onopen;
+            },
+            set onopen(e) {
+              ws.onopen = e;
+            },
+            get onmessage() {
+              return ws.onmessage;
+            },
+            set onmessage(e) {
+              ((ws_on_message = e),
+                (ws.onmessage = WG.receive_message),
+                unsafeWindow.funny &&
+                  null != unsafeWindow.funny.API &&
+                  ((unsafeWindow.funny.API.ws_on_message = e),
+                  (unsafeWindow.funny.API.websocket = ws)));
+            },
+            get onclose() {
+              return ws.onclose;
+            },
+            set onclose(t) {
+              ws.onclose = (e) => {
+                (WG.stopPotentialWorkAutoCheck &&
+                  WG.stopPotentialWorkAutoCheck(),
+                  WG.resetMasterTaskAutomation &&
+                    WG.resetMasterTaskAutomation(),
+                  WG.resetActivityAutomation &&
+                    WG.resetActivityAutomation(),
+                  WG.resetYaotaAutomation && WG.resetYaotaAutomation(),
+                  WG.resetLegacyStatusMonitors &&
+                    WG.resetLegacyStatusMonitors(),
+                  WG.resetDailyWorkflows && WG.resetDailyWorkflows(),
+                  (WG.online = !1),
+                  (G.connected = !1),
+                  (auto_relogin = GM_getValue(
+                    roleid + "_auto_relogin",
+                    auto_relogin,
+                  )),
+                  t(e),
+                  "开" == auto_relogin &&
+                    setTimeout(() => {
+                      (console.log(new Date()), KEY.do_command("score"));
+                    }, 1e4));
+              };
+            },
+            get onerror() {
+              return ws.onerror;
+            },
+            set onerror(e) {
+              ws.onerror = e;
+            },
+            send: function (e) {
+              var t;
+              if (
+                (null == G.cookie && (G.cookie = e),
+                -1 < e.indexOf(G.id) &&
+                  !G.connected &&
+                  (e = G.cookie + " " + G.id),
+                G.cmd_echo &&
+                  ((t = new Date().toLocaleTimeString()),
+                  show_msg("<hic>" + t + "</hic> <hiy>" + e + "</hiy>")),
+                "$" == e[0])
+              )
+                WG.SendCmd(e);
+              else {
+                if ("@" == e[0]) {
+                  if (unsafeWindow && unsafeWindow.ToRaid)
+                    return void ToRaid.perform(e);
+                  (messageAppend(
+                    "插件未安装,请访问 https://greasyfork.org/zh-CN/scripts/375851-wsmud-raid 下载并安装",
+                  ),
+                    window.open(
+                      "https://greasyfork.org/zh-CN/scripts/375851-wsmud-raid ",
+                      "_blank",
+                    ).location);
+                }
+                switch (
+                  ((0 != e.indexOf("jh ") && 0 != e.indexOf("go ")) ||
+                    ("开" == auto_rewardgoto && WG.Send("tm " + e)),
+                  e)
+                ) {
+                  case "sm":
+                    T.sm();
+                    break;
+                  case "wk":
+                    WG.zdwk();
+                    break;
+                  case "backup":
+                    WG.make_config();
+                    break;
+                  case "load":
+                    WG.load_config();
+                    break;
+                  default:
+                    ws.send(e);
+                }
+              }
+            },
+            close: function () {
+              ws.close();
+            },
+          }),
+          (cmd_queue = []),
+          (cmd_busy = !1),
+          (echo = !1),
+          (_send_cmd = function () {
+            if (ws && 1 == ws.readyState)
+              if (0 < cmd_queue.length) {
+                cmd_busy = !0;
+                for (
+                  var e = new Date().getTime(), t = 0;
+                  t < cmd_queue.length;
+                  t++
+                )
+                  if (
+                    !cmd_queue[t].timestamp ||
+                    cmd_queue[t].timestamp >= e - 1300
+                  ) {
+                    cmd_queue.splice(0, t);
+                    break;
+                  }
+                for (t = 0; t < Math.min(cmd_queue.length, 5); t++)
+                  if (!cmd_queue[t].timestamp)
+                    try {
+                      (ws.send(cmd_queue[t].cmd), (cmd_queue[t].timestamp = e));
+                    } catch (e) {
+                      return ((cmd_busy = !1), void (cmd_queue = []));
+                    }
+                cmd_queue[cmd_queue.length - 1].timestamp
+                  ? (cmd_busy = !1)
+                  : setTimeout(_send_cmd, 100);
+              } else cmd_busy = !1;
+            else ((cmd_busy = !1), (cmd_queue = []));
+          }),
+          (send_cmd = function (e, t) {
+            if (ws && 1 == ws.readyState)
+              if (((e = e instanceof Array ? e : e.split(";")), t))
+                for (var s, o = 0; o < e.length; o++)
+                  (G.cmd_echo &&
+                    ((s = new Date().toLocaleTimeString()),
+                    show_msg("<hic>" + s + "</hic> <hiy>" + e[o] + "</hiy>")),
+                    ws.send(e[o]));
+              else {
+                for (o = 0; o < e.length; o++)
+                  cmd_queue.push({ cmd: e[o], timestamp: 0 });
+                cmd_busy || _send_cmd();
+              }
+          }))
+        : console.log(
+            "插件不可运行,请打开'https://greasyfork.org/zh-CN/forum/discussion/41547/x'",
+          ),
+      {
+        msg: function (e) {
+          layer ? layer.msg(e, { offset: "50%", shift: 5 }) : messageAppend(e);
+        },
+        isMobile: function () {
+          var e = navigator.userAgent,
+            t =
+              !e.match(/(iPad).*OS\s([\d_]+)/) &&
+              e.match(/(iPhone\sOS)\s([\d_]+)/),
+            e = e.match(/(Android)\s+([\d.]+)/);
+          return t || e;
+        },
+      }),
+    roomItemSelectIndex = -1;
+  let itemKeys = [
+      "name",
+      "id",
+      "count",
+      "grade",
+      "unit",
+      "value",
+      "can_eq",
+      "can_use",
+      "can_study",
+      "can_open",
+      "can_combine",
+      "locked",
+    ],
+    eqKeys = ["name", "id", "grade", "can_use", "locked"],
+    selllistKeys = ["name", "id", "count", "locked", "unit", "value"],
+    storeKeys = [
+      "name",
+      "id",
+      "count",
+      "grade",
+      "unit",
+      "value",
+      "can_eq",
+      "can_use",
+      "can_study",
+      "can_open",
+      "can_combine",
+    ];
+  var automationStaticData = unsafeWindow.WSMudPlugin.createService(
+      "automation-static-data",
+    ),
+    timer = 0,
+    cnt = 0,
+    zb_npc,
+    zb_place,
+    next = 0,
+    roomData = [],
+    packData = [],
+    storeData = [],
+    eqData = [],
+    store_list = [],
+    lock_list = [],
+    needfind = automationStaticData.getNeedFindRoutes(),
+    pgoods = {},
+    goods = {
+      米饭: { id: null, type: "wht", sales: "店小二", place: "扬州城-醉仙楼" },
+      包子: { id: null, type: "wht", sales: "店小二", place: "扬州城-醉仙楼" },
+      鸡腿: { id: null, type: "wht", sales: "店小二", place: "扬州城-醉仙楼" },
+      面条: { id: null, type: "wht", sales: "店小二", place: "扬州城-醉仙楼" },
+      扬州炒饭: {
+        id: null,
+        type: "wht",
+        sales: "店小二",
+        place: "扬州城-醉仙楼",
+      },
+      米酒: { id: null, type: "wht", sales: "店小二", place: "扬州城-醉仙楼" },
+      花雕酒: {
+        id: null,
+        type: "wht",
+        sales: "店小二",
+        place: "扬州城-醉仙楼",
+      },
+      女儿红: {
+        id: null,
+        type: "wht",
+        sales: "店小二",
+        place: "扬州城-醉仙楼",
+      },
+      醉仙酿: {
+        id: null,
+        type: "hig",
+        sales: "店小二",
+        place: "扬州城-醉仙楼",
+      },
+      神仙醉: {
+        id: null,
+        type: "hiy",
+        sales: "店小二",
+        place: "扬州城-醉仙楼",
+      },
+      布衣: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      钢刀: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      钢刀: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      木棍: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      英雄巾: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      布鞋: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      铁戒指: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      簪子: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      长鞭: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      钓鱼竿: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      鱼饵: {
+        id: null,
+        type: "wht",
+        sales: "杂货铺老板 杨永福",
+        place: "扬州城-杂货铺",
+      },
+      铁剑: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      铁棍: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      铁杖: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      铁镐: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      飞镖: {
+        id: null,
+        type: "wht",
+        sales: "铁匠铺老板 铁匠",
+        place: "扬州城-打铁铺",
+      },
+      hig金创药: {
+        id: null,
+        type: "hig",
+        sales: "药铺老板 平一指",
+        place: "扬州城-药铺",
+      },
+      hig引气丹: {
+        id: null,
+        type: "hig",
+        sales: "药铺老板 平一指",
+        place: "扬州城-药铺",
+      },
+    },
+    equip = { 铁镐: 0 },
+    npcs = {
+      店小二: 0,
+      "铁匠铺老板 铁匠": 0,
+      "药铺老板 平一指": 0,
+      "杂货铺老板 杨永福": 0,
+    },
+    place = automationStaticData.getPlaceRoutes(),
+    mpz_path = automationStaticData.getMpzPath(),
+    diff_colors = {
+      normal: "",
+      access:
+        "https://cdn.jsdelivr.net/gh/mapleobserver/wsmud-script/plugins/wsmud_color_accessibility.css",
+      flat: "https://cdn.jsdelivr.net/gh/mapleobserver/wsmud-script/plugins/wsmud_color_flat.css",
+    },
+    fb_path = [],
+    drop_list = [],
+    fenjie_list = [],
+    blacklist = "",
+    blackpfm = [],
+    role,
+    roleid,
+    family = null,
+    sm_loser = "开",
+    sm_price = null,
+    sm_getstore = null,
+    sm_any = "开",
+    wudao_pfm = "",
+    ks_pfm = "2000",
+    ks_wait = "120",
+    automarry = null,
+    autoKsBoss = null,
+    stopauto = !1,
+    getitemShow = null,
+    zmlshowsetting = 0,
+    bagFull = 0,
+    pushSwitch = "关",
+    pushType = "0",
+    pushToken = "",
+    auto_command = null,
+    eqlist = {},
+    skilllist = {},
+    unauto_pfm = "",
+    auto_pfmswitch = "开",
+    auto_pfm_mode = "开",
+    auto_rewardgoto = "关",
+    busy_info = "关",
+    saveAddr = "关",
+    auto_updateStore = "关",
+    auto_relogin = "关",
+    autoeq = "",
+    zml = [],
+    zdy_item_store = "",
+    zdy_item_store2 = "",
+    zdy_item_lock = "",
+    zdy_item_drop = "",
+    zdy_item_fenjie = "",
+    ztjk_item = [],
+    zdyskills = "关",
+    zdyskilllist = "",
+    welcome = "",
+    shieldswitch = "开",
+    shield = "",
+    shieldkey = "",
+    statehml = "",
+    backimageurl = "",
+    loginhml = "",
+    timequestion = [],
+    silence = "开",
+    pfmnum = 0,
+    pfmdps = 0,
+    dpssakada = "开",
+    critical = 0,
+    criticalnum = 0,
+    dpslock = 0,
+    battletime = 0,
+    lastcri = 0,
+    lastpfm = 0,
+    funnycalc = "关",
+    inzdy_btn = !1,
+    zdy_btnlist = [],
+    auto_buylist = "",
+    auto_skillPaperSelllist = "",
+    color_select = "normal",
+    exit1 = void 0,
+    exit2 = void 0,
+    exit3 = void 0,
+    KEY = unsafeWindow.WSMudPlugin.createService("automation-keyboard", {
+      getWG: function () {
+        return WG;
+      },
+      getG: function () {
+        return G;
+      },
+      getButtonMode: function () {
+        return inzdy_btn;
+      },
+      getJquery: function () {
+        return $;
+      },
+      getDocument: function () {
+        return document;
+      },
+      getWindow: function () {
+        return window;
+      },
+      getTimers: function () {
+        return {
+          setTimeout: setTimeout,
+        };
+      },
+      getKeyApi: function () {
+        return KEY;
+      },
+      setExitState: function (primary, upper, lower) {
+        exit1 = primary;
+        exit2 = upper;
+        exit3 = lower;
+      },
+    });
+  function textBecomeImg(e, t, s) {
+    var o = document.createElement("canvas"),
+      a = 0,
+      a =
+        (t <= 32
+          ? (a = 1)
+          : 32 < t && t <= 60
+            ? (a = 2)
+            : 60 < t && t <= 80
+              ? (a = 4)
+              : 80 < t && t <= 100
+                ? (a = 6)
+                : 100 < t && (a = 10),
+        (o.height = t + a),
+        o.getContext("2d"));
+    return (
+      a.clearRect(0, 0, o.width, o.height),
+      (a.fillStyle = s),
+      (a.font = t + "px KaiTi"),
+      (a.textBaseline = "middle"),
+      a.fillText(e, 0, t / 2),
+      (o.width = a.measureText(e).width),
+      (a.fillStyle = s),
+      (a.font = t + "px KaiTi"),
+      (a.textBaseline = "middle"),
+      a.fillText(e, 0, t / 2),
+      o.toDataURL("image/png")
+    );
+  }
+  function messageClear() {
+    $(".WG_log pre").html("");
+  }
+  var log_line = 0;
+  function textShow(e) {
+    imgShow(textBecomeImg(e, 90, "red"));
+  }
+  function imgShow(e, t = 2e3) {
+    ($(".container .content-message").css(
+      "background",
+      "url(" + e + ") no-repeat center center",
+    ),
+      setTimeout(() => {
+        $(".container .content-message").css("background", "");
+      }, t));
+  }
+  function messageAppend(e, t = 0, s = 0) {
+    var o;
+    s
+      ? ((o = e + "\n"),
+        1 == t
+          ? (o = "<hiy>" + o + "</hiy>")
+          : 2 == t
+            ? (o = "<hig>" + o + "</hig>")
+            : 3 == t
+              ? (o = "<hiw>" + o + "</hiw>")
+              : 4 == t && (o = "<hir>" + o + "</hir>"),
+        $(".content-message pre").append(o))
+      : (100 < log_line && ((log_line = 0), $(".WG_log pre").empty()),
+        (o = e + "\n"),
+        1 == t
+          ? (o = "<hiy>" + o + "</hiy>")
+          : 2 == t
+            ? (o = "<hig>" + o + "</hig>")
+            : 3 == t
+              ? (o = "<hiw>" + o + "</hiw>")
+              : 4 == t && (o = "<hir>" + o + "</hir>"),
+        $(".WG_log pre").append(o),
+        log_line++,
+        ($(".WG_log")[0].scrollTop = 99999));
+  }
+  function syncAutomationStaticDataFromService() {
+    needfind = reconcileAutomationStaticData(
+      "needfind",
+      needfind,
+      automationStaticData.getNeedFindRoutes(),
+      (value) => automationStaticData.setNeedFindRoutes(value),
+    );
+    place = reconcileAutomationStaticData(
+      "place",
+      place,
+      automationStaticData.getPlaceRoutes(),
+      (value) => automationStaticData.setPlaceRoutes(value),
+    );
+    mpz_path = reconcileAutomationStaticData(
+      "mpz_path",
+      mpz_path,
+      automationStaticData.getMpzPath(),
+      (value) => automationStaticData.setMpzPath(value),
+    );
+    sm_array = reconcileAutomationStaticData(
+      "sm_array",
+      sm_array,
+      automationStaticData.getMasterTasks(),
+      (value) => automationStaticData.setMasterTasks(value),
+    );
+  }
+  function syncAutomationStaticDataToService() {
+    automationStaticData.setNeedFindRoutes(needfind);
+    automationStaticData.setPlaceRoutes(place);
+    automationStaticData.setMpzPath(mpz_path);
+    automationStaticData.setMasterTasks(sm_array);
+    automationStaticDataSnapshot.needfind = needfind;
+    automationStaticDataSnapshot.place = place;
+    automationStaticDataSnapshot.mpz_path = mpz_path;
+    automationStaticDataSnapshot.sm_array = sm_array;
+  }
+  function reconcileAutomationStaticData(
+    key,
+    legacyValue,
+    serviceValue,
+    setServiceValue,
+  ) {
+    var previousValue = automationStaticDataSnapshot[key];
+    if (legacyValue !== previousValue) {
+      setServiceValue(legacyValue);
+      automationStaticDataSnapshot[key] = legacyValue;
+      return legacyValue;
+    }
+    if (serviceValue !== previousValue) {
+      automationStaticDataSnapshot[key] = serviceValue;
+      return serviceValue;
+    }
+    return legacyValue;
+  }
+  var sm_array = automationStaticData.getMasterTasks(),
+    automationStaticDataSnapshot = {
+      needfind: needfind,
+      place: place,
+      mpz_path: mpz_path,
+      sm_array: sm_array,
+    },

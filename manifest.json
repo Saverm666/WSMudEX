@@ -1,0 +1,76 @@
+{
+  "manifest_version": 3,
+  "name": "WSMudEX",
+  "version": "1.0.14",
+  "description": "加载 wsmud2.com / wsmud2.cn / wxmud1.com 的 JavaScript 文件",
+  "permissions": ["scripting", "storage"],
+  "host_permissions": [
+    "http://*.wsmud2.com/*",
+    "https://*.wsmud2.com/*",
+    "http://wsmud2.cn/*",
+    "https://wsmud2.cn/*",
+    "http://*.wsmud2.cn/*",
+    "https://*.wsmud2.cn/*",
+    "http://wxmud1.com/*",
+    "https://wxmud1.com/*",
+    "http://*.wxmud1.com/*",
+    "https://*.wxmud1.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*.wsmud2.com/*",
+        "https://*.wsmud2.com/*",
+        "http://wsmud2.cn/*",
+        "https://wsmud2.cn/*",
+        "http://*.wsmud2.cn/*",
+        "https://*.wsmud2.cn/*",
+        "http://wxmud1.com/*",
+        "https://wxmud1.com/*",
+        "http://*.wxmud1.com/*",
+        "https://*.wxmud1.com/*"
+      ],
+      "js": [
+        "runtime/page-settings-sync.js",
+        "extension/page-load-plan.js",
+        "extension/content-loader.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "runtime/*.js",
+        "vendor/*.js",
+        "features/plugin/*.js",
+        "features/plugin/plugin-enhancements.css",
+        "features/*.js",
+        "client/*.js",
+        "client/modules/*.js"
+      ],
+      "matches": [
+        "http://*.wsmud2.com/*",
+        "https://*.wsmud2.com/*",
+        "http://wsmud2.cn/*",
+        "https://wsmud2.cn/*",
+        "http://*.wsmud2.cn/*",
+        "https://*.wsmud2.cn/*",
+        "http://wxmud1.com/*",
+        "https://wxmud1.com/*",
+        "http://*.wxmud1.com/*",
+        "https://*.wxmud1.com/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "WSMudEX"
+  },
+  "icons": {
+    "128": "assets/icon-128.png"
+  },
+  "background": {
+    "service_worker": "extension/service-worker.js"
+  }
+}

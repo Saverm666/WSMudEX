@@ -1,0 +1,31 @@
+const ClientConnection = unsafeWindow.WSMudClient.createModule("connection", {
+  jquery: $,
+  getClient: function () {
+    return GameClient;
+  },
+  setClient: function (client) {
+    GameClient = client;
+  },
+  setSelectedServer: function (server) {
+    SelectedServer = server;
+  },
+  closeServer: CloseServer,
+  createClient: function (ip, port) {
+    return new WSClient(ip, port);
+  },
+  getUserCookie: GetUserCookie,
+  sendCommand: SendCommand,
+  getProcess: function () {
+    return Process;
+  },
+  getReceiveData: function () {
+    return ReceiveData;
+  },
+  getReceiveMessage: function () {
+    return ReceiveMessage;
+  },
+  hideAndShow: HideAndShow,
+});
+var ConnectServer = ClientConnection.connectServer,
+  ShowInputError = ClientConnection.showInputError,
+  ShowLoader = ClientConnection.showLoader;

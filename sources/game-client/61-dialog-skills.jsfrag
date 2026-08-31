@@ -1,0 +1,33 @@
+const ClientDialogSkills = unsafeWindow.WSMudClient.createModule("dialog-skills", {
+  getDialog: () => Dialog,
+  getProcess: () => Process,
+  getSendCommand: () => SendCommand,
+  getJQuery: () => $,
+  getCheckScroll: () => checkScroll,
+  getWrapName: () => wrap_name,
+  getExtend: () => Dialog.extend,
+  getScript: () => SCRIPT,
+  getSetting: () => Setting,
+});
+Dialog.skills = ClientDialogSkills.skills;
+Dialog.master = ClientDialogSkills.master;
+const ClientSkillCalculator = unsafeWindow.WSMudClient.createModule("skill-calculator", {
+  jquery: $,
+  getDialog: function () { return Dialog; },
+  getGameState: function () {
+    return typeof G !== "undefined" ? G : window.G || {};
+  },
+  getWrapName: function () { return wrap_name; },
+});
+var SKILL_TRAINING_FORMULA_PARAMS =
+  ClientSkillCalculator.SKILL_TRAINING_FORMULA_PARAMS;
+function ParseSkillTrainingEfficiency(value) {
+  return ClientSkillCalculator.ParseSkillTrainingEfficiency(value);
+}
+function CalculateSkillTrainingCost(options) {
+  return ClientSkillCalculator.CalculateSkillTrainingCost(options);
+}
+function FormatSkillTrainingDuration(minutes) {
+  return ClientSkillCalculator.FormatSkillTrainingDuration(minutes);
+}
+Dialog.skillcalc = ClientSkillCalculator.skillcalc;

@@ -1,0 +1,13 @@
+const ClientSettings = unsafeWindow.WSMudClient.createModule("settings", {
+  jquery: $,
+  documentRef: document,
+  getDialog: function () { return Dialog; },
+  getProcess: function () { return Process; },
+  getCombat: function () { return Combat; },
+  sendCommand: SendCommand,
+});
+const MAP_DIR_EXITS = ClientSettings.MAP_DIR_EXITS;
+var Setting = ClientSettings.Setting,
+  create_name = ClientSettings.createName,
+  create_id = ClientSettings.createId,
+  create_prop = ClientSettings.createProp;

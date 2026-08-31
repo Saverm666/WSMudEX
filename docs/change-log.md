@@ -1,0 +1,535 @@
+# WSMudEX 变更记录
+
+## 2026-08-31：技能悬浮窗只响应真实菜单点击并恢复详情操作
+
+- 现象：一键换装等流程通过脚本模拟点击技能菜单时会打开技能悬浮窗；流程结束前切到其他悬浮窗，后续模拟点击还可能再次切回技能窗。技能悬浮窗内点击“查看详细”后，详情虽进入自由窗，但原技能详情中的“进阶”“融合”“遗忘”等按钮没有随描述迁移。
+- 差异与根因：菜单分派没有区分浏览器产生的可信点击和脚本触发的合成点击；结构化技能详情的自由窗只传入 `desc`，而操作按钮仍由原生 `Dialog.skills/master.showdesc` 单独写入对话框 footer。
+- 修改：`skills` 菜单只接受浏览器标记为可信的实际菜单点击，脚本、快捷键和自动流程调用不再打开或切换技能窗；抽取自身及师父/随从技能详情的共用按钮生成函数，原生详情和自由详情窗使用同一份命令 HTML。
+- 验证：重新生成客户端聚合文件，扩展完整验证通过（121 个 JavaScript 文件、67 个页面脚本及 24 个语义片段）。尚未完成现网浏览器中的真实鼠标点击、触屏点击及一键换装流程实测。
+- 突破丹复查：第一版只隔离了菜单入口，未覆盖从物品悬浮窗“使用”后返回的技能协议。参考服务端确认突破丹升级会推送 `{type:"dialog",dialog:"skills",id,level,exp}` 增量包；原次级页面逻辑将所有非背包 `dialog` 包都视为完整页面，因此把该增量强制打开成技能窗。现仅将带 `items` 数组的 `skills/master/pack` 完整列表认作可打开页面，技能等级、经验和详情增量只更新已有模型。新增突破丹协议形态回归测试，全部 29 项单元测试及完整扩展验证通过。
+
+## 2026-08-28：适配 wxmud1.com 魔改客户端
+
+- 现象：在 `wxmud1.com` / `www.wxmud1.com` 打开后卡在「正在获取服务器列表」。
+- 差异：该站是独立 SPA。页面 HTML 为空，由原站模块脚本挂载登录 UI；服务器列表接口仍是 `/api/game/servers`，但 WebSocket 走 `wss`，开连接后先发 `#binary v1`，后续帧为二进制。
+- 根因：扩展按官方站方式拦截并替换游戏客户端，覆盖了原站 `Process`/`Dialog`/`$`，服务器列表回调无法完成。
+- 修改：`wxmud1.com` 改为叠加模式，不拦截原站脚本、不注入 `client/*`；新增二进制协议解码，并把插件收到的二进制帧转成 JSON，避免把 `#binary v1` 当成登录 cookie。
+- 验证：加载计划与二进制解码单测通过；扩展验证覆盖官方站仍替换客户端、`wxmud1.com` 不拦截原站且不注入游戏客户端。尚未完成该站登录后的现网实测。
+
+## 2026-08-28：扩展同时支持 wxmud1.com
+
+- 修改：Manifest 的 `host_permissions`、内容脚本和可访问资源匹配补上 `wxmud1.com` 根域名及子域名；内容脚本拦截原站脚本时同样识别该站点。已有 `.com` / `.cn` 站点行为不变。
+- 验证：扩展验证覆盖 Manifest 匹配与内容脚本注入。尚未完成现网 `wxmud1.com` 实测。
+
+## 2026-08-23：回家与师父传送前换装改为可选
+
+- 需求：师傅、回家等传送处的自动换衣服改为可选项。
+- 修改：插件设置“功能开关”增加“传送前智能换装”，默认开启以保持原行为。关闭后，回家、去师父和潜能挂机不再先换套装，直接执行原传送/挂机。
+- 验证：纯函数测试覆盖默认开启、关闭后跳过换装并继续原动作；完整扩展验证通过。尚未现网登录后开关实测。
+
+## 2026-08-23：插件设置可禁用自动出招绝招
+
+- 需求：在自动出招设置页里关掉部分绝招后，自动出招只使用仍开启的固定招式。
+- 修改：插件设置“自动攻击”下增加当前绝招开关列表；关闭项写入角色原有 `unauto_pfm` 黑名单，并同步运行时 `blackpfm`，不改上游自动出招调度。未配置时仍默认全部可用。
+- 验证：纯函数测试覆盖名单解析、开关切换和黑名单同步；完整扩展验证通过。尚未现网登录后打开插件设置实测。
+
+## 2026-08-23：恢复 PC 自动副本托管执行器
+
+- 现象：PC 端点击“自动副本”中的任一副本后立即显示 `ReferenceError: ManagedPerformerCenter is not defined`，流程没有启动。
+- 上游差异与根因：对照备份的原始 `wsmud_Raid.user.js`，`ManagedPerformerCenter` 位于 `Performer` 后方，负责创建、登记、停止和注销所有自动副本/工作流程。迁移 Raid 执行运行时时只提取了 `Performer`、命令中心和技能状态机，漏掉了整个托管中心；界面、`@stop` 和 `ToRaid.perform` 的调用却仍保留原名称。
+- 修改：在 `raid-flow-execution-runtime` 中按上游语义恢复 `ManagedPerformerCenter.start/getAll`、唯一运行键、默认日志、完成回调和运行状态清理；`raid-flow-engine.js` 通过运行时服务显式取得该对象，并用回调维护工作流程按钮边框，不新增另一个全局实现。
+- 验证：动态测试使用替身 Performer 确认自动副本启动后进入托管列表、停止后移除并恢复按钮状态；浏览器按实际脚本顺序加载后调用 `ToRaid.perform` 完成一个流程，页面无 `ReferenceError`。扩展完整验证通过。尚需账号登录后选择真实副本完成全程实测。
+
+## 2026-08-23：左栏换装后背包与属性再次同步
+
+- 现象：通过左侧装备快捷栏切换装备后，再打开原生背包会缺少刚换下的物品或继续显示旧装备；左栏气血、内力上限等状态也可能停留在换装前。
+- 根因：上一轮为避免把插件对象写坏原生紧凑数组缓存，停止了后台快照写回，但没有清除用户以前打开背包形成的旧缓存；原生背包因此仍认为缓存有效并发送 `pack none`。属性同步只在换装后约 350ms 查询一次，现网装备属性重算较慢时可能读到旧上限。
+- 修改：收到任何完整背包快照时，如果原生背包当前没有打开，就使其旧 `items/eqs` 缓存失效；插件仍使用解码后的快照即时刷新左栏装备。用户下次打开背包会发送完整 `pack`。所有 `eq/uneq/eqgroup` 及左栏装备选择在首次合并刷新后增加一次 900ms 延迟复核，同时重新请求背包和人物属性；连续换装继续通过同一计时器合并。
+- 验证：浏览器先植入换装前的旧原生背包缓存，再注入后台完整快照；旧缓存被清除，手动打开背包实际发送 `pack` 并显示新物品。动态契约覆盖首次装备/属性刷新、延迟复核、连续命令合并与 `cr over` 排除；完整扩展验证通过。
+
+## 2026-08-23：恢复三点菜单“插件”文字
+
+- 现象：横向三点菜单中的插件插头图标仍在，但图标下方“插件”两个汉字消失。
+- 根因：插件设置初始化只在入口完全不存在时创建完整按钮；页面若已经残留一个只有图标的不完整入口，初始化会直接跳过修复。图标和文字在原生固定按钮高度内也缺少独立的尺寸约束，现网页面字号变化时存在末行裁切风险。
+- 修改：每次登录初始化都校正唯一的插件入口，补建缺失的 `.tool-text` 并强制恢复“插件”文案、标题和无障碍名称；横向菜单下缩小该入口图标并为两个汉字设置明确的显示、行高、颜色与防裁切样式。
+- 验证：浏览器测试预先注入一个只有图标的残缺插件入口，登录初始化后仍只有一个入口，文字恢复为“插件”，计算样式为可见并保留“插件设置”名称；扩展完整验证通过。
+
+## 2026-08-23：任务黑屏与手动背包空白二次修复
+
+- 现象：任务页打开后主体黑屏，底部仍残留黄金/商城等上一页按钮；背包能够进入正确页面，但物品区完全为空。
+- 根因：上游任务进度摘要按旧版固定文案解析师门、追捕和运镖描述，现网描述不匹配时访问空正则结果并抛错，异常发生在任务协议转交给游戏客户端之前。背包还有两层问题：用户在后台装备快照等待期间手动打开背包时，下一份完整 `dialog=pack` 响应可能被静默消费；后台快照解码成插件对象后又被直接写入只接受紧凑数组的原生背包缓存，使原生背包误以为已有数据，手动点击只发送 `pack none` 而不请求完整列表。
+- 修改：任务进度摘要降级为非阻塞增强，任何未知文案或字段只跳过摘要，不再阻断原生任务页面；任务页一打开就设置原生标题、图标并清空旧页脚。后台背包只更新插件的左栏物品与装备缓存，不再污染原生背包；手动打开时保持原生缓存未初始化并发送完整 `pack`。完整背包响应到达时若同一原生页面已打开，则所有后台捕获/静默匹配只结束等待标记，不再吞掉页面数据。
+- 验证：Playwright 使用现网页面 DOM，注入无法匹配旧正则的师门描述，任务页仍显示任务内容且页脚为空；后台背包快照完成后，手动打开背包确实发送完整 `pack`；同时存在装备捕获和通用静默匹配时，同一响应仍正确显示一件压缩协议物品。扩展完整验证通过，清包存售链、自动攻击轮换、左栏同步、双栏与悬浮窗关闭回归继续通过。尚需账号登录后的真实服务器复测。
+
+## 2026-08-23：隔离后台快照与手动工具窗口
+
+- 现象：点击任务、技能、商城或背包时，悬浮窗经常显示另一个页面；背包偶尔能打开但内容为空，任务页可能一直无法进入。
+- 根因：左栏恢复实时同步后，协议桥会静默请求 `pack/score/score2`，而上游登录流程仍在一秒后通过原生工具按钮重复请求 `pack/score/score2/party`。这些未隔离的后台响应与玩家手动请求交错，`Dialog.show()` 会按最新到达的 `dialog` 切换当前窗口；遗留的无期限背包捕获标记还可能吞掉后续手动背包响应。
+- 修改：登录快照收敛为协议桥唯一入口；移除上游登录流程对背包、属性和队伍按钮的重复请求。背包快照使用三秒有界捕获并在响应到达时立即清理，属性、自动攻击属性和队伍响应分别按明确的 `dialog` 字段静默消费；手动工具请求不复用后台捕获状态。
+- 验证：浏览器中先打开任务页，再交错注入后台背包、普通属性、自动攻击属性和队伍响应，当前窗口保持“任务列表”并显示任务内容；随后手动打开背包并注入一件压缩协议物品，背包保持当前窗口且显示一件物品。清包、自动攻击、左栏同步、双栏和悬浮窗关闭回归测试继续通过。
+
+## 2026-08-22：修复上游清包协议与左栏实时同步
+
+- 现象：清包到达钱庄并打开仓库/背包后不再存物或售卖；左栏血量、内力、精力、潜能、经验为空或更新迟缓，装备需要很久才出现。
+- 根因：恢复的上游清包按 `item.name/id/count` 对象字段处理数据，现网背包和仓库仍会发送紧凑数组；同时此前位于重构 `GI.init` 中的仪表盘协议 Hook 没有随项目增量接回。上游算法本身没有问题，错误发生在协议边界和增量接线。
+- 修改：新增 `protocol-compatibility.js`，在所有上游业务 Hook 之前幂等解码 `items/eqs/selllist/stores`，但保持传给游戏客户端的原始协议不变；恢复静默快照匹配、装备响应捕获和仪表盘实时 Hook。登录后立即静默请求背包与属性，后续 `score/sc/items/itemadd/itemremove/dialog/text/combat` 到达后在上游状态更新结束的同一事件循环内刷新左栏。
+- 验证：Playwright 使用现网页面 DOM 和模拟 WebSocket 发送压缩数组协议。配置存仓物品后，清包实际发出 `store 2 smoke-store-item`，随后发出 `sell all`；左栏即时显示 `321/654` 血量、`111/222` 内力及上限、`45/100(+6)` 精力、`789` 潜能、`987` 经验和“烟测长剑”。自动攻击、左右栏和悬浮窗回归测试继续通过。尚需账号登录后的真实服务器复测。
+
+## 2026-08-22：撤下自动化重构并恢复上游核心
+
+- 现象：点击 `#wg cleanup` 后既无提示也无移动；自动攻击不能连续选择可用技能。此前的模块级烟测只证明拆分函数存在，没有覆盖真实页面加载、日志 UI 挂载和原生动作点击链。
+- 根因：自动化主体被拆成数十个模块后，上游 `WG/G/KEY/GI` 的闭包、启动顺序和公开桥接被多次覆盖；此外清包在日志面板尚未挂载时会因提示写入抛错，从而在发送第一条移动命令前终止。
+- 修改：页面自动化入口切换为 `knva/wsmud_plugins` 提交 `c1112c0f5b8b2957de20a0f11a66e77f22321f32` 的 `wsmud_pluginss.user.js`。上游自动施法、清包、导航、自动交易、套装和衙门逻辑不再由拆分模块覆盖；只在同一闭包内安装角色切换、侧栏/智能换装、导航增强、首轮出招、布局、UI 外壳和插件设置等项目增量。日志输出增加未挂载时的页面消息区回退，提示失败不再中断业务命令。
+- 登录增量：补回此前位于重构登录主体中的双栏、右侧聊天、尺寸拖动、插件设置、悬浮按钮拖动和悬浮窗开关初始化。切回上游时只迁回了 UI 模板，没有迁回这些登录后调用，导致双栏 HTML 未完成布局、悬浮窗关闭按钮没有事件。
+- 回滚：切换前完整扩展和上游完整 Git 仓库分别保存于工作区 `backups/`，并记录 SHA-256。
+- 验证：完整扩展校验通过；Playwright 使用现网 `wsmud2.com` 页面 DOM、拦截原站游戏脚本并按扩展实际顺序注入页面脚本。模拟登录后左右栏各创建一次且可见，打开悬浮面板再点击关闭按钮后恢复 `display:none`；真实点击 `#wg cleanup` 后可见“包裹整理开始”，并依次发出前往钱庄、`store`、`pack`，模拟仓库/背包协议后继续前往杂货铺并发出 `sell all`；自动攻击在第一技能进入冷却后继续发出第二技能。该测试使用模拟 WebSocket，尚未代替登录账号后的现网服务器实测。
+
+## 2026-08-22：贯通修复自动出招、清包和衙门追捕主链
+
+- 现象：上一轮把普通自动出招改成强制轮转并接入首轮队列后，现网仍可能只执行一招或不继续；清包流程能够启动，但存仓、分解和丢弃规则没有命中；追捕快捷入口走自制的 `ask1`/`goto yamen2` 确认链，没有进入原仓库的任务解析、寻路和击杀流程。
+- 上游依据：重新核对 `knva/wsmud_plugins` 的 `wsmud_pluginss.user.js` 与 `wsmud_pluginss_next.user.js`。普通自动出招应每 350ms 从技能首项开始，跳过黑名单、公共冷却和技能冷却后发送第一个可用技能；清包应在钱庄按原顺序发出 `store;pack`，随后存仓、分解、去杂货铺 `sell all`、丢弃；追捕入口应调用 `WG.go_yamen_task`，由任务描述决定目标地点并自动搜敌。
+- 根因与修改：移除自动出招核心中的轮转游标和首轮拦截，恢复上游的冷却优先调度；进一步发现迁移只改了智能施法的“非零释放时间中断”分支，却没有同步适配现网可能带小数、空格和颜色标签的 `releasetime`，导致零秒招式仍被当成非零并在第一招中断。现统一解析秒数，零秒继续扫描全部可用招式，缺少 `score2` 时主动补请求。背包协议解码器同时接受压缩数组与已经解码的对象；清包不再把左栏实时同步等并发流程的第一个 `pack` 当作自己的响应，而是等待本次仓库 `list` 后再主动请求并消费背包快照。曾尝试等待异步 `WG.go` 完成后才发仓库命令，但该 Promise 并不代表上游命令链已完成，实测造成无法移动的回归；已撤回并严格恢复 `WG.go("扬州城-钱庄"); WG.Send("store;pack")` 的即时发送时序，同时加入“前往钱庄→取得仓库→取得背包”页面阶段提示。侧栏追捕及旧 `go_yamen_teleport_task` 兼容入口统一委托 `WG.go_yamen_task`，不再发送固定 `goto yamen2`。
+- 验证：动态回归覆盖冷却后选择下一技能、带小数/空格/标签的零秒判断、智能模式连续扫描三招、并发早到 `pack` 隔离、仓库后专属背包请求、压缩行完整清理命令、对象行二次解码幂等，以及追捕兼容入口委托原流程；重新生成聚合文件，完整扩展验证通过。尚未完成现网 Chrome 战斗、钱庄清包与完整追捕实测。
+
+## 2026-08-22：停止自动添加动作按钮，修复智能换装/挂机互斥与衙门跳转
+
+- 现象：用户删除的 `#wg` 动作按钮刷新后又被自动补回；回家/师父处智能换装与潜能挂机同时读取背包时，其中一个流程可能无声失效；原生路线在房间尚未刷新时解析 `@npc(程药发)`，会跳过问询却继续执行 `goto yamen2`。
+- 根因：扩展命令初始化主动合并了一组“推荐按钮”；智能套装和挂机工具共用 `smartEquipmentPreparationToken`，任一方启动都会使另一方的回调过期；`score2.study_per` 的服务端值已包含先天悟性，套装公式却又加了一次；原衙门串联命令仅依赖固定延时，且无条件发送传送命令。
+- 修改：移除推荐按钮列表和自动合并入口，保存、删除和启用状态完全由用户配置决定；为智能套装与挂机工具使用独立代际标记，学习套装公式先从详细属性中扣除已包含的先天悟性，钓鱼改为真正等到江边后再发送 `diao`；衙门入口等待到达并重试取得 NPC ID，只在收到程药发的接取/已接取确认后执行 `goto yamen2`，超时、NPC 失效、无逃犯或已满级时取消跳转。
+- 验证：配置回归改为断言不暴露按钮生成 API，扩展命令空配置初始化不再写入 `extends`；完整扩展验证覆盖两类换装的独立标记和衙门确认后传送契约。尚未完成现网连服实测。
+
+## 2026-08-22：左侧装备、背包、属性上限与精力实时同步
+
+- 现象：套装或左栏快捷换装后，左栏装备显示“未装备”；随后打开原生背包可能显示空列表；装备改变气血/内力上限、进入或扫荡副本消耗精力后，左栏继续显示旧值，直到手动打开属性页。
+- 差异与根因：服务器换装只下发 `dialog=pack` 的 `eq/uneq` 增量，装备重算不会额外发送人物 `sc`；精力存放在角色临时数据中，消耗成功也通常没有独立增量协议。左栏为避免弹出背包而截获了内部 `pack` 响应，但没有把快照同步给原生 `Dialog.pack`；增量找不到物品详情时又只保存 ID 和空名称。左栏读取时优先使用仍然陈旧的 `G.items/G.hp/G.mp`，所以即使收到静默 `score`，上限和当前值也可能被旧人物缓存覆盖。
+- 修改：新增合并式状态刷新器。登录、`eq/uneq/eqgroup`、进入副本和扫荡命令后，静默请求权威 `pack`/`score`；插件命令和游戏原生 `SendCommand` 都接入同一观察入口。完整背包响应同时更新左栏物品/装备、`G.eqs` 和原生 `Dialog.pack` 缓存；属性响应同时回写 `G.score`、人物缓存、气血/内力当前值与上限及精力。连续套装命令通过防抖合并，不会每件装备各发一组快照。
+- 验证：新增连续换装与耗精命令合并、`cr over` 排除、属性人物缓存回写、静默背包同步原生缓存和登录快照回归契约；重新生成语义聚合文件并通过完整扩展验证。尚未完成现网连服下的人工换装、背包和副本消耗实测。
+
+## 2026-08-22：修复自动施法、三点菜单和常用自动交易迁移回归
+
+- 现象：非智能自动施法始终重复技能列表第一项；智能模式遇到零秒释放技能时反而停止扫描。关闭“横向三点菜单”后没有恢复游戏原生竖排，而是套用了另一组无间距竖排样式。自动购买、秘籍自动售卖、包裹整理、仓库排序和直接清包售卖存在无响应、到达前发命令或带颜色名称匹配失败。
+- 原实现差异：原游戏 `tool.js` 的关闭形态由 `ShowToolsAnimate` 控制并使用 `main.css` 的原生竖排间距，迁移时被横向模块和关闭态 CSS 一并替换。上游 `wsmud_pluginss.user.js` 的自动施法中断条件本身写反，非智能模式又总从索引 0 开始；自动交易依靠固定路线串执行。迁移到异步 `WG.go` 后仍沿用“寻路后立即发命令”的写法，并且静态路线迁移漏掉了 `扬州城-书院`。
+- 修改：普通施法改为循环轮转可用技能，智能施法仅对非零释放技能停止本轮扫描；停止/换战斗时重置游标及正确的 `pfmskill` 字段。横向菜单样式仅在开关启用时生效，关闭后走恢复的原生展开动画和原生 CSS。自动购买/秘籍售卖迁入独立 `auto-trading.js`，补回书院路线、等待到达后再请求 NPC/背包、去除名称颜色标签并统一清理 Hook。包裹整理修正星标物品保护与名称归一化；仓库排序、直接清包售卖、武庙疗伤和神级挂机均等待到达后再执行后续命令。
+- 验证：新增施法三技能轮转、零秒判断、菜单原生回退、当铺购买、书院售卖、钱庄异步到达、彩色名称和 Hook 销毁回归测试；重新生成两个语义聚合文件，完整扩展验证通过。尚未完成现网连服及浏览器人工点击实测。
+
+## 2026-08-22：补回逍遥/丐帮门派战场掌门速通
+
+- 现象：动作栏里原先速通逍遥、丐帮战场掌门的命令没了。
+- 修改：缺省再写入两条动作栏扩展：`goto fam3 XIAOYAO;go down;go down` 和 `goto fam3 GAIBANG;go down;go east;go east;go east;go east;go east;go up`。已有同命令不覆盖。江湖页平时掌门仍用 `$to` 进公共地图，不会进战场副本。
+- 验证：`page-settings-sync` 单测覆盖这两条命令会补进缺失配置。尚未完成现网战场传送实测。
+
+## 2026-08-22：师父处、清包售卖和挂机到达判断失效
+
+- 现象：动作栏里的师父处、清理背包/售卖和挂机点击后经常不走完：清包在钱庄干等，挂机在路上就采药/挖矿。
+- 根因：到达判断用 `.room-name` 的 HTML 去精确包含 `扬州城-杂货铺` 这类全名。现网房间标题经常只有「杂货铺」，或夹着色标签；缺节点时 `.html().indexOf` 还会抛错，`$to` 后续的 `sell all` 发不出去。挂机的 `WG.go` 没有等待到达。
+- 修改：房间名去掉标签后再做双向包含匹配，并回退到 `G.room_name`；发出路线后等待到达。采药/挖矿在进入药林或矿山后再发 `cai`/`wa`。`#wg` 动作在运行时解析当前 `WG`。
+- 验证：`navigation-core` 单测覆盖短名和带色房间标题；扩展验证覆盖杂货铺匹配。尚未完成现网动作栏实测。
+
+## 2026-08-22：跨站点还原插件设置与动作栏快捷按钮
+
+- 现象：同一角色打开 `wsmud2.com` / `wsmud2.cn` 或其他新页面时，插件开关、原生动作栏（挂机、师父处、回家等）会空掉。
+- 根因：这些配置写在页面 `localStorage`，按站点源隔离；扩展之前只读当前页，不会带到新域名。
+- 修改：内容脚本在注入游戏脚本前，用 `chrome.storage.local` 的 `wsmudSyncedPageSettings` 回填当前页缺失键，并定时把本页配置写回扩展存储。登录初始化原生扩展时，若动作栏还没有 `#wg auto/work/master/home/wumiao/cleanup/yamen`，则追加这些按钮并默认开启；已有同名命令不改名称、开关或角色映射。
+- 验证：`page-settings-sync` 单测覆盖缺失键回填、本地值优先和推荐按钮去重。尚未完成现网 `.com` 配好再开 `.cn` 的实测。
+
+## 2026-08-22：扩展同时支持 wsmud2.cn
+
+- 修改：Manifest 的 `host_permissions`、内容脚本和可访问资源匹配补上 `wsmud2.cn` 及子域名；内容脚本拦截原站脚本时同样识别 `.cn`。`.com` 站点行为不变。
+- 验证：扩展验证覆盖 Manifest 匹配与内容脚本注入。尚未完成现网 `wsmud2.cn` 实测。
+
+## 2026-08-22：练习/学习时点击任意处弹出技能悬浮窗
+
+- 现象：正在练习或学习（信息栏持续刷技能文字）时，点击空白处或其他非技能按钮，有概率弹出技能悬浮窗。
+- 根因：详情窗用“先记下一次等待，再把之后信息栏里带颜色的长文本当成响应”的泛化匹配。练习状态每约 5 秒会把「你对某技能似乎有些心得」送进信息栏，只要队列里还留着江湖武功/战利品的文本等待，就会被当成技能详情弹窗。无 `cmd` 的点击也不会清掉等待。
+- 修改：练功/学习/心得/研读等状态文本一律忽略，不喂给悬浮窗；无命令点击也会取消等待。技能悬浮窗仍只应由 `checkskill`（技能栏“查看详细”或江湖门派武功）的对应响应打开。
+- 验证：`detail-popup-policy` 单测覆盖心得与练习状态忽略。尚未完成现网练习时乱点实测。
+
+## 2026-08-22：清包跳转杂货铺后无法售卖
+
+- 现象：整理背包/清包能走到扬州城-杂货铺，但 `sell all` 不会成交。
+- 根因：`$to` 只把路线命令发出去，固定再等 100ms 就执行后续命令。`jh fam 0 start;go east;go south` 尚未走完时售卖已发出，房间里还没有商人。
+- 修改：新增到达等待，`$to` 先 `await WG.go()`，再等到 `WG.at()` 为真并额外稳定 300ms 后才续发命令。清包去钱庄取仓同样等到达后再 `store;pack`。
+- 验证：`wait-until-at` 单测覆盖到达、超时和稳定等待；扩展验证覆盖 `$to` 在售卖前等待到达。尚未完成现网清包实测。
+
+## 2026-08-22：江湖战利品详情窗与技能悬浮窗误触发
+
+- 现象：江湖页点击战利品或门派武功只在信息栏输出，同时可能弹出正在升级的技能悬浮窗；吃任意品质突破丹后也可能弹出技能窗。
+- 根因：`checkskill <id> help` 被第三段参数误判为师父技能详情并等待 `dialog=master`；技能匹配允许无 ID 的 `desc` 响应。突破丹的 `use` 经确认框 `SendCommand` 发出，不经过点击分派入口，旧详情请求不会被清掉。`look3 n of fb_*` 未纳入详情命令。
+- 修改：新增 `detail-popup-policy`，把帮助/战利品列为短超时文本详情；只消费描述类文本，忽略“等级提升了/吞下突破丹”等提示。技能结构化详情必须 ID 与 `desc` 同时匹配。`SendCommand` 对非详情命令也清空等待队列。
+- 验证：`detail-popup-policy` 单测覆盖命令分类、升级包隔离和文本过滤；需跑完整扩展验证。尚未完成现网江湖战利品与突破丹实测。
+
+## 2026-08-21：迁移自动化键盘、Raid 执行运行时与客户端技能对话框
+
+- 自动化键盘：新增 `features/plugin/automation-keyboard.js`，迁出 `KEY` 的 61 个按键映射、聊天/对话框分层处理、方向移动、战斗/房间动作和场景物品选择；`00-foundation.jsfrag` 在原声明链创建服务并保留同一词法 `KEY`，后续协议、启动和 `getKeyApi()` 继续读取同一对象。WG、G、自定义按钮模式、jQuery、document、window 和 timer 均动态取得；`dialog_confirm` 仍使用 500ms 节流。重复 `KEY.init()` 现只安装一次 document `keydown` 和一组映射，修复历史重复初始化时累加监听/按键项的问题。服务返回动态代理：历史 direct eval 整体重绑词法 `KEY` 后，已安装的旧 document 监听仍转发到新对象；方向选择结果也同步回原 `exit1/exit2/exit3` 词法状态。
+- Raid 执行运行时：新增 `features/plugin/raid-flow-execution-runtime.js`，迁出命令预处理/执行中心、`Performer`、`At/Until` 执行器与 Promise 包装、技能状态机、系统命令展开和注册链、`GetDungeonFlow` 包装及 `AncientCmdExecuter`。引擎在原声明和注册位置保留可重绑定词法别名，四档执行器优先级在创建服务前初始化；系统执行器仍按 `cmdDelay → 普通系统命令 → force → perform → on → off` 的历史插入过程注册，排序后的实际匹配顺序、Worker/Blob、Promise 和定时器行为不变。
+- 客户端技能：新增 `client/modules/dialog-skills.js`，合并迁出 `Dialog.skills` 与 `Dialog.master`；`61-dialog-skills.jsfrag` 只保留 skills/master 创建桥和既有 `skill-calculator` 桥。Dialog、命令、jQuery、滚动、名称包装、扩展查询、SCRIPT 与 Setting 均延迟读取，工厂阶段不访问后置声明；master 的 `close/createSkillItems/createSkillItem/updateSkill/updateSkillItem/showdesc/isEnable` 与 skills 继续保持严格同一函数身份，`cha/cha none`、学习/进阶/融合/遗忘、书架、`LAST_OBJ` 和扩展查询语义不变。
+- 验证：新增完整 61 键顺序、重复初始化、动态按钮模式/出口、词法 KEY 整体重绑和 500ms 确认；Raid 优先级对象身份、预处理单例/排序、执行器选择、系统命令展开、六执行器注册/实际 `cmdDelay/perform/on/off` 回调、副本包装和 Ancient 动态 WG/Hook；技能后置依赖零读取、七方法身份、首次/缓存命令、协议渲染、动态排序、自身/师父点击、`LAST_OBJ` 和扩展命令测试。同步修正已迁移 map/skills 的反向抽取边界，并让验证器检查每个边界唯一；`extract → check` 已通过。重建后 `features/automation-suite.js` 从 3,584 行降至 3,261 行，`features/raid-flow-engine.js` 从 2,891 行降至 2,592 行，`client/game-client.js` 从 5,745 行降至 4,959 行；100 个 JavaScript 文件、93 个页面脚本及 24 个语义片段完整验证通过。尚未完成真实 Chrome 键盘焦点/弹窗层级、Raid Worker/流程执行和技能/师父/书架交互实测。
+
+## 2026-08-21：迁移外部消息菜单、桃花岛迷宫与客户端扩展命令
+
+- 自动化消息/菜单：新增 `features/plugin/automation-message-menu.js`，迁出外部 `message` 命令分发、常用/门派传送菜单和房间名右键菜单构造。`99-bootstrap-and-exports.jsfrag` 保留 `originWindow`、单次监听/菜单注册和薄桥；`#js` 仍回调原自动化 IIFE 的 direct `eval`，并在 `finally` 中同步静态数据。WG、Raid、角色、工作 timer、自定义按钮模式、时钟和 Deferred 均动态读取，17:00 路线边界和 20ms promise 时序不变。
+- Raid 桃花岛：新增 `features/plugin/raid-flow-th-island.js`，迁出 `THIsland` 的出桃花阵、周伯通寻路、坐标解码和 Hook 清理；`AncientCmdExecuter` 留在引擎，`let THIsland` 在原位置挂回服务对象并继续传给快捷流程。保留两套命令数组、1000ms 间隔、双 Hook 顺序、全桃花林洞穴判定、逆序移除和历史重入共享状态。
+- 客户端扩展命令：新增 `client/modules/dialog-extensions.js`，完整迁出 `Dialog.extend` 的自定义按钮、触发器、过滤器、录制、编辑和角色开关；`66-dialog-extensions.jsfrag` 仅保留 keys/extend 创建桥及 friend/pay。`SCRIPT` 由运行时 getter 延迟读取，避免 66 片段先于 70 片段加载时提前访问；保留 `extends` 键、`lAST_MATCHES/LAST_DATA` 拼写、`on:true` 角色映射、`#` 前缀及所有 DOM/命令。
+- 已知遗留表达式缺陷：`Dialog.extend.express` 定义了 `=` 比较器，但历史 `exp_reg` 只接受 `>=/<=/!=/>/<`，因此 `level(=10)` 不会形成等值条件。根因和迁移前实现一致，本批为保持等价未扩大正则；验证继续锁定当前表达式结构，后续若修复需作为独立兼容变更覆盖旧配置。
+- 验证：新增外部消息、JSON 忽略、Raid、direct-eval、17 点路线、Deferred、动态 WG 菜单；桃花岛路径守卫、命令数组、中心方向、数字坐标、出阵、周伯通洞穴和 Hook 清理；扩展命令 SCRIPT 延迟读取、角色映射、存储、动作刷新及消息/数据触发动态测试。重建后 `features/automation-suite.js` 从 3,826 行降至 3,584 行，`features/raid-flow-engine.js` 从 3,155 行降至 2,891 行，`client/game-client.js` 从 6,402 行降至 5,745 行；97 个 JavaScript 文件、90 个页面脚本及 24 个语义片段完整验证通过。尚未完成真实 Chrome 跨窗口命令、右键菜单、桃花岛迷宫及扩展命令编辑/录制实测。
+
+## 2026-08-21：迁移自动化协议状态、Raid 房间状态与客户端社交对话框
+
+- 自动化协议状态：新增 `features/plugin/automation-protocol-state.js`，把 `GI.init()` 中第三个多事件 Hook 整体迁出；`94-protocol-and-config.jsfrag` 在原注册位置保留 `ProtocolState.init()` 薄桥。保留 `login` 读取旧 `G.id` 后请安、`room` 读取旧战斗状态、`clearDistime` 落入 `dispfm`、出口 Map、人物/技能/冷却/状态镜像、重复 `GI.init()` 重复注册及所有原定时器时序；WG/G/GI、角色、WebSocket、存储、jQuery、消息与定时器均通过显式动态上下文提供。
+- Raid 房间状态：新增 `features/plugin/raid-flow-room.js`，迁出 `Room` 的位置、场景物品、状态、死亡记录和查询 Hook；引擎保留可重绑定的 `var Room`，所有 Hook 均动态获取当前对象，过滤器也动态转发当前 `FilterCenter.filter`。保留输入对象引用、房间事件整体替换集合、死亡引用、非消费查询和重复 `init()` 注册行为。
+- 客户端社交对话框：新增 `client/modules/dialog-social.js`、`dialog-events.js` 与 `dialog-pm.js`，迁出消息/关系/帮派/队伍、活动和拍卖行。`65-dialog-commerce-and-social.jsfrag` 仅保留商城及三组新模块创建桥和 `format_time_span`；四个社交对象仍成组创建以保持互相切换和公开身份，`cancle/dissmiss` 等历史命令拼写不变。拍卖倒计时继续使用绝对截止时间，并显式注入时钟和 interval 生命周期。
+- 验证：新增模块注册与薄桥约束，以及 Raid 三组 Hook、动态 Room、对象/死亡引用、过滤；协议登录请安、出口映射、重复 init、`clearDistime → dispfm` 和冷却回调；社交对象身份、关系动态时间格式、三类命令、队伍原地更新、活动未读、拍卖截止时间及 timer 替换动态测试。重建后 `features/automation-suite.js` 从 4,081 行降至 3,826 行，`features/raid-flow-engine.js` 从 3,251 行降至 3,155 行，`client/game-client.js` 从 7,389 行降至 6,402 行；94 个 JavaScript 文件、87 个页面脚本及 24 个语义片段完整验证通过。尚未完成真实 Chrome 登录/战斗冷却、Raid 房间切换、消息/帮派/队伍/活动及拍卖实测。
+
+## 2026-08-21：迁移自定义流程、Raid 观察缓存与频道/任务对话框
+
+- 自定义流程：新增 `features/plugin/custom-workflows.js`，迁出 `WG.zmlfire/zmlztjk/zml_edit/zml_showp` 的三类执行、按角色存储、Vue 编辑/分享和快捷按钮渲染。模块通过动态角色、词法 `zml/zmlshowsetting` getter/setter、remoteConfig、Raid、UI 和存储上下文运行；`zmlType=2` 仍回到自动化 IIFE 的原位 direct `eval`，并继续包裹静态数据双向同步。保留空类型普通命令、历史无效数组判断、重复名称更新怪异行为、`.room-commands/.zdy-commands` 位置、`WG.isseted` 和原存储键。
+- 角色残留修复：旧实现以当前词法 `zml/zmlshowsetting` 作为 `GM_getValue` fallback，A → 无配置的 B 时会继承 A 的快捷流程和显示位置；已打开的 A 编辑器也可能在切换后把旧列表写入 B，旧流程/监控面板还能在 B 执行 A 的入口。模块分别记录流程与显示设置的角色代际：同角色仍接受历史 direct eval/设置页词法更新，角色变化且键缺失时改用 `[]/0`，切回已有角色则从原键恢复；Vue 编辑器绑定打开时角色，迟到的保存只回写原角色键且不向当前角色注入按钮或词法状态，过期面板的运行/启停/分享入口直接失效。不迁移、不重命名或删除任何旧配置。
+- Raid 观察缓存：新增 `features/plugin/raid-flow-observers.js`，迁出 `SystemTip/SystemTips/MsgTip/MsgTips/DialogList/TaskList/Xiangyang`。引擎在原声明位置保留七个同名可重绑定词法别名，并动态转发当前 `WG`、`FindItem` 及提示构造器，继续兼容历史 `@js`。系统/频道提示的 100 条 FIFO、清理边界、拒绝时间、对话克隆解码、`pack2.items` 原引用、任务/襄阳时间戳和重复 `init()` Hook 行为均保持。
+- 客户端对话框：新增 `client/modules/dialog-channel.js` 与 `dialog-tasks.js`。频道模块保留首次点击节流、右侧聊天优先、七频道过滤、`rumor → sys`、全区 uid 清理、超过 800 条后清空的历史行为及抽屉节点恢复；任务模块保留每次显示先发 `tasks`、单次挂载、三类状态、`task <id> fin` 和增量原地更新/删除。`63-dialog-lists-and-settings.jsfrag` 仅保留两项创建桥、客户端设置和排行榜桥。
+- 验证：新增模块注册/薄桥静态约束，以及自定义流程三类执行、A/B/空角色/切回角色、词法 fallback、Raid 动态对象、Vue 保存和旧编辑器迟到操作隔离；Raid 六 Hook、重复 init、构造器重绑定、正则捕获、FIFO、克隆解码、FindItem、任务/襄阳/实例隔离；频道侧栏返回 false/原生时序、协议变异、筛选/缓存/恢复及任务引用身份、重复 ID、全量/增量/关闭动态测试。重新构建后 `features/automation-suite.js` 从 4,209 行降至 4,081 行，`features/raid-flow-engine.js` 从 3,382 行降至 3,251 行，`client/game-client.js` 从 7,616 行降至 7,389 行；89 个 JavaScript 文件、82 个页面脚本及 24 个语义片段完整验证通过。尚未完成真实 Chrome 自定义流程编辑/分享、Raid 等待指令、右侧聊天切换和任务领取实测。
+
+## 2026-08-21：迁移自动化静态路线与师门数据
+
+- 迁移：新增 `features/plugin/automation-static-data.js`，迁出 `needfind`、`place`、`mpz_path` 和 `sm_array` 四组固定数据；canonical state 位于服务工厂外，多次 `createService` 仍共享同一可变对象。服务提供路线、门派路径和师门表的显式 get/set API，setter 原样保存并返回传入值，不复制、不冻结或校验。
+- `eval` 兼容：自动化 IIFE 在原声明链继续保留四个裸词法别名。三处历史 direct `eval`（自定义流程、设置开关表达式和页面 `#js` 消息）均留在原函数和原作用域，只在执行前双向仲裁、在 `finally` 中反向同步，因此读取、原地修改、整体重绑定及“重绑定后抛异常”仍能更新 canonical state；设置表达式的返回值仍赋给原变量。身份快照还能识别 eval 返回的异步闭包在稍后进行的词法重绑定，并在旧 getter 或下次 eval 读取时同步；若词法侧与服务侧同时整体替换，以历史词法变量为先。
+- 消费桥：`G.getBossRoutes/getNeedFindRoutes/getPlaceRoutes/getMasterTasks` 改为直接读取服务，已迁移的导航、追捕和师门模块能立即看到历史脚本的整体重绑定；`mpz_path` 虽暂无静态消费者，仍作为兼容词法变量保留。
+- 验证：动态锁定四组数据的键数、顺序和完整 JSON SHA-256，覆盖跨服务对象身份、setter 可见性、direct eval 整体重绑定、异常传播、`finally` 同步、延迟闭包重绑定和服务侧反向替换。重新构建后 `features/automation-suite.js` 从 4,348 行降至 4,209 行；85 个 JavaScript 文件、78 个页面脚本及 24 个语义片段完整验证通过。尚未完成真实 Chrome 自定义脚本对四个变量的读取、重绑定及后续导航/师门消费实测。
+
+## 2026-08-21：迁移 Raid 云端服务与客户端商城
+
+- Raid Server：新增 `features/plugin/raid-flow-server.js`，迁出配置、角色流程、触发器、公告、单流程/触发器分享导入和手机接口共 15 个成员；引擎在原声明位置通过 getter 注入动态角色、FlowStore、WorkflowConfig、TriggerConfig/Center、消息、脚本版本、GM API、jQuery、layer 和 alert，并保留同一 `Server` 词法别名供 UI 与历史 `@js Server.*` 使用。
+- 网络兼容：保留 `wsmud.ii74.com/S`、POST/JSON、`_sync(async:false)`、`_async(async:true)`、200 成功分派、非 200 优先 `data`、无 AJAX error 回调、`corver` 历史拼写、`roles/@@@trigger` 特殊处理、`shareFlowTrigger` 原地写 `author`、全部获取码校验和原提示文案。动态测试模拟全部网络请求，覆盖配置/流程/触发器、普通/重要公告、隐藏版本键、分享/导入、动态角色及带凭据手机接口。
+- 客户端商城：新增 `client/modules/dialog-shop.js`，迁出 `Dialog.shop` 的三类货币、商品协议、折扣/限购计算、列表渲染和购买入口；`65-dialog-commerce-and-social.jsfrag` 从 1,284 行降至 1,051 行，仅保留模块创建桥和其余社交对象。`moneyToStr` 由 getter 延迟读取，公开 `Dialog.shop` 对象、严格 ID 查找、列表引用和原地 `splice` 均保持。
+- 商城验证：覆盖首次/重复打开的 `shop` 与 `shop <idx>`、双/三货币切换、动态金额格式化、三组商品、折扣原价、限购剩余量、精确 `_confirm shop` 命令、数量更新优先级、移除优先级和关闭状态。重新构建后 `features/raid-flow-engine.js` 从 3,623 行降至 3,382 行，`client/game-client.js` 从 7,849 行降至 7,616 行；84 个 JavaScript 文件、77 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 云端同步、公告弹窗、商城购买/转入和活动货币实测。
+
+## 2026-08-21：迁移 Raid 固定快捷流程
+
+- 迁移：新增 `features/plugin/raid-flow-shortcuts.js`，迁出 `xianyu_xyjq/xianyu_xybm/xianyu_ksyb/xianyu_sdyt/xianyu_mghyj/xianyu_ltbm/xianyu_setting/cangbaotu/cihang/zhanshendian/guzongmen` 共 11 个固定流程，以及 `@taohualin`、`@zhoubotong` 两个命令注册。引擎在原声明位置显式注入 `Performer`、同一 `THIsland` 和命令注册适配器，并保留 `DungeonsShortcuts` 词法别名供 UI 与历史 `@js` 流程访问。
+- 兼容：逐字保留 11 个模板字符串、显示名和 `new Performer → log(false) → start()` 调用顺序；模板中的 `Message/$/prompt/parseInt` 仍由引擎原 Performer 与 `@js` 执行器在原 IIFE 词法环境解析，没有移入模块作用域执行。桃花林/周伯通 handler 仍返回 Promise，并只在同一 `THIsland` 回调完成时 resolve。
+- 去重：插件服务工厂本身不缓存。模块以注册适配器函数身份记录已安装状态；同一引擎注册器重复创建服务仍可获得独立流程对象，但不会再次插入两个 `AtCmdExecutor`。不同命令中心使用不同注册器时仍可各自完成安装，不改变服务隔离能力。
+- 验证：动态捕获全部 Performer，锁定方法顺序、名称、完整流程源码 JSON SHA-256 `914b5c…54fe`、`log(false)` 和 `start()`；同时覆盖两条命令顺序、Promise 回调、重复创建去重和缺失上下文异常。重新构建后 `features/raid-flow-engine.js` 从 4,259 行降至 3,623 行；82 个 JavaScript 文件、75 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 一键咸鱼、藏宝图、慈航/战神殿/古宗门和桃花岛命令实测。
+
+## 2026-08-21：迁移客户端快捷键与背包协议解码器
+
+- 快捷键：新增 `client/modules/dialog-keys.js`，迁出 `Dialog.keys` 的移动/菜单分组、动作栏/技能栏扩展、设置页录入、`keys` 存储和全局 `keydown` 执行；`66-dialog-extensions.jsfrag` 从 1,017 行降至 699 行，只在原位置以 getter 注入后置声明的 `Util`/`SCRIPT` 并挂回同一公开对象。
+- 生命周期兼容：保留 `init_key()` 桌面端只读一次存储并永久安装一个全局监听、移动端直接跳过、`show/hide/close` 只管理 body 录入监听、重复 `show()` 仍重复追加 jQuery 委托的历史行为；同时保留 `selected_silder` 无关的快捷键原拼写、39 个项目、修饰键前缀顺序、仅 body 目标执行、`id2keys` 保存后不更新及清除时可能留下旧映射的既有副作用。
+- 参考差异：`wsmud2/src/dialog/keys.js` 的动作栏和技能栏各生成 12 项，而迁移前扩展片段两处循环均为 `< 9`，合计 39 项。由于参考源码版本与当前扩展真源不一致，本批继续保留 9+9 个动态栏位，没有机械扩为 12+12；验证器显式锁定 `#action 0…8`、`#pfm 0…8` 和总数 39。
+- 解码器：新增 `features/plugin/pack-data-codec.js`，迁出 `WG.deserializePackData` 的四类压缩行映射；`10-runtime-core.jsfrag` 改为服务创建和函数身份桥。字段表继续保留为自动化 IIFE 词法变量，并通过动态 getter 注入服务，因此历史工作流 `eval` 重新绑定字段表后仍可影响后续解码。
+- 协议兼容：保留顶层对象原地返回、四类数组替换、稀疏数组、缺失字段属性、额外字段忽略、`items` 空行抛错、其余空行转 `null`、truthy 非数组抛错、falsy 字段不变和重复解码非幂等语义。动态测试覆盖完整字段映射、对象/数组身份、异常边界、动态字段表、快捷键分组/监听/存储/录入/执行/移动端及历史反向索引副作用。
+- 结果：重新构建后 `features/automation-suite.js` 从 4,389 行降至 4,348 行，`client/game-client.js` 从 8,167 行降至 7,849 行；81 个 JavaScript 文件、74 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 背包/仓库全协议、快捷键冲突、设置页重复打开和输入焦点实测。
+
+## 2026-08-21：迁移 Raid 断言服务与客户端排行榜
+
+- Raid 断言：新增 `features/plugin/raid-flow-assert.js`，迁出左值处理中心、断言 wrapper/holder、默认 `true/false/比较` 注册和 `&&/||/!` 递归解析；引擎保留同名词法别名供 `%CC`、`@until` 及历史流程脚本使用。每次服务创建得到独立中心，单次引擎运行中的比较 holder 与左值处理器仍共享同一实例。
+- 断言兼容：保留默认 holder 追加顺序、首个左值 handler 命中、数值比较 `0.001` 容差、非数值宽松比较、第一个组合运算符递归拆分、逐次新建 wrapper，以及未知表达式返回 `null` 后由旧消费者调用时报错的历史边界。`features/raid-flow-engine.js` 从 4,394 行降至 4,259 行。
+- 客户端排行：新增 `client/modules/dialog-stats.js`，迁出六类榜单、两组 `STATS_SILDER` 过滤数据、排行/兵器/评分渲染、门派筛选、一分钟缓存和点击命令；`63-dialog-lists-and-settings.jsfrag` 从 960 行降至 581 行，只保留模块创建与 `Dialog.stats` 兼容桥。运行时事件处理继续通过公开 `Dialog.stats` 分派，保留 footer/共享过滤数组身份、`selected_silder` 拼写、缓存数组引用和全部 HTML/命令字符串。
+- 验证：动态覆盖断言实例隔离、默认/比较/容差/组合/未知表达式、handler 与自定义 holder，以及排行榜共享数组、首次请求、四类协议渲染、缓存命中、高手榜查看/挑战/奖励和关闭后缓存。聚合持续缩小后同步将客户端防截断体积门槛从 250KB 调整为 200KB；语义片段逐字校验仍为主要完整性门槛。重新构建后 `client/game-client.js` 从 8,546 行降至 8,167 行；79 个 JavaScript 文件、72 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome `%CC/@until` 工作流、排行榜筛选、自由详情窗和缓存刷新实测。
+
+## 2026-08-21：迁移客户端江湖与副本对话框
+
+- 迁移：新增 `client/modules/dialog-jianghu.js`，迁出 `Dialog.jh_fam/jh_fb/jh_ar/jh` 的门派、普通副本、禁地与江湖入口实现；原 `64-dialog-jianghu.jsfrag` 从 488 行缩为 13 行显式模块创建和公开对象兼容桥。`Dialog`、jQuery、`SendCommand` 与 `ReceiveMessage` 均由上下文提供。
+- 兼容：保留 `jh_fb.select/onClickItem` 与门派方法的引用身份、`jh_ar.append_status/append_actions` 的共享引用、`jh.footers` 三个原对象及顺序、服务端列表对象的可变更新、解锁位图、详情/奖励/首杀 HTML、原命令字符串、`show_first()` 消息回放，以及首次打开 `jh`、再次打开 `jh fb lock` 的时序。
+- 参考差异：`wsmud2/src/dialog/jh.js` 会给普通副本/禁地详情追加地图扩展按钮，并写入中文 `type`；迁移前扩展片段只在门派详情调用 `Dialog.extend.append("map")`，且门派详情保留协议字段 `t`、副本/禁地不补 `type`。参考源码对应版本与当前扩展行为不一致，本批按扩展代码真源保持原状，没有机械补入参考实现。
+- 验证：新增模块注册/薄桥静态约束与动态对象身份、列表映射、首个门派请求、普通副本/禁地解锁、历史消息回放和重复打开测试。重新生成后 `client/game-client.js` 从 9,021 行降至 8,546 行；77 个 JavaScript 文件、70 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 门派详情、三类副本切换、奖励/首杀内容和地图扩展按钮实测。
+
+## 2026-08-21：迁移 Raid 内置副本目录
+
+- 迁移：新增 `features/plugin/raid-flow-dungeons.js`，从 `features/raid-flow-engine.js` 迁出 38 个内置副本名称、可选描述和完整流程源码；引擎改为创建 `raid-flow-dungeons` 服务，并通过 `getSource()` 和 `getAll()` 分别服务 `@fb`/自动副本解析与 Vue 副本列表。
+- 兼容：逐项保留原表顺序、模板字符串首换行、`温府(2k+闪避)` 唯一描述、名称宽松比较和找不到流程时返回 `null`。服务在重复创建时继续公开同一个可变数组及原对象，未冻结、复制、排序或清洗，保持 UI 和旧调用方的引用语义；`小树林 → 树林` 及普通/困难/组队模式解析仍留在原运行时位置。
+- 验证：新增完整目录 JSON SHA-256、数量/首尾/描述/换行、共享身份、可变性、宽松查找和缺失返回值测试，并静态锁定引擎服务桥及小树林运行节点。重新构建后 `features/raid-flow-engine.js` 从 5,320 行降至 4,394 行；76 个 JavaScript 文件、69 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 副本列表、`@fb` 和三种自动副本模式实测。
+
+## 2026-08-21：迁移客户端技能潜能计算器
+
+- 迁移：新增 `client/modules/skill-calculator.js`，迁出七档技能颜色参数、`ParseSkillTrainingEfficiency`、`CalculateSkillTrainingCost`、`FormatSkillTrainingDuration` 和 `Dialog.skillcalc`；`61-dialog-skills.jsfrag` 原 279 行实现缩为 20 行创建/公开兼容桥。`Dialog`、自动化状态 `G` 和后置声明的 `wrap_name` 均通过动态 getter 显式注入。
+- 兼容：保留 `_skillcalc <id> practice|study`、个人/师傅技能来源、浮动父层请求消费与回退、全部 DOM 类名和 `data-field/data-result`、四组委托事件、目标等级聚焦、空 `hide()`、`close()` 只 detach 且保留旧技能对象等公开行为。公式继续保留 JS `Number` 强制转换、练习公式扣除先天悟性、学习速度乘 3、`Math.floor`、分钟小数/小时向上进位、固定错误文案及效率字符串中全部数字相加的历史语义。
+- 验证：验证器改为直接加载 `client/core.js` 和新模块，不再从聚合源码正则截取公式。动态覆盖白/红潜能、练习/学习速度、效率负数/小数/指数怪异解析、时间边界、错误文案、个人/师傅入口与过期层请求，以及完整表单渲染、事件唯一绑定、模式切换、成功/错误输出、重复显示和关闭。重新生成后，`client/game-client.js` 从 9,280 行降至 9,021 行；75 个 JavaScript 文件、68 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 技能页/师傅页父层回退、窄屏布局、拖动和焦点实测。
+
+## 2026-08-21：迁移旧状态监控与妖塔运行时
+
+- 状态监控：新增 `features/plugin/legacy-status-monitors.js`，迁出 `WG.ztjk_func/ztjk_hook` 的协议匹配和命令执行，旧设置/分享 UI 暂留在聚合片段。监控清单和房间快照改由动态 accessor 获取，克隆、`G`、消息与命令接口显式注入；保留 `dispfm/enapfm/dialog/room/itemadd/itemremove/status/text/msg/die/combat/sc` 注册类型、本人/他人/NPC 判断、层数阈值、多关键词多次触发以及 `{id}/{name}/{content}` 替换的历史细节。该兼容层继续读取 `<角色>_ztjk`，与新 Trigger 配置体系互不转换。
+- 妖塔：新增 `features/plugin/yaota-automation.js`，迁出 `WG.ytjk_func`，保留 `zc/mu/shishenta` 路径、`#yt_prog` DOM、频道/队伍报告、261 妖元圆满判断和原聊天命令。日期格式、jQuery 与计时器改为显式上下文。
+- 生命周期：旧状态监控和妖塔房间监听均改为唯一 Hook，Hook ID 为 0 时也能清理。重复注入、登录、WebSocket 断线或销毁会移除当前 Hook；妖塔离场等待可取消，重复离场消息不会建立多组等待，旧角色回调不会在新会话发送队伍消息。断线入口新增两个直接重置调用。
+- 结果：从 `80-workflows-and-settings.jsfrag` 删除 322 行运行时实现，自动化聚合文件从 4,700 行降至 4,389 行。动态测试覆盖状态层数、文本清洗/多关键词、频道/死亡/拾取/战斗/技能事件、背包解码、血蓝双阈值、房间人物匹配、Hook ID 0、原字段恢复、重复注入和登录清理，以及妖塔进出、重复离场、忙碌重进取消、登录重置、圆满报告和销毁；重新构建后 74 个 JavaScript 文件、67 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 旧监控全部协议字段组合、妖塔战斗离场、断线重连和角色切换实测。
+
+## 2026-08-21：迁移一键日常、请安与追捕扫荡流程
+
+- 迁移：新增 `features/plugin/daily-workflows.js`，迁出 `WG.oneKeyDaily/oneKeyQA/oneKeySD` 及 `daily_hook/sd_hook`；门派、师门表、jQuery、消息输出、日志和计时器改由显式上下文提供。保留原警告与完成文案、`tasks/signin/yamen` 字段、描述正则、固定 2 秒/1 秒/200ms 时序、请安 `$findPlayerByName` 命令、程药发 `select/ask1/ask2/ask3/shop` 顺序、小树林次数计算及 `oneKeySD()` 的同步返回语义。
+- 生命周期：日常和扫荡各自精确拥有唯一 Hook，重复启动复用当前流程；异步协议事件按工作流串行执行。登录、WebSocket 断线、公开重置或销毁会清理 Hook 与定时器，并主动解除等待 Promise，使旧角色已进入等待的师门启动、请安和扫荡回调不再发命令。小树林完成改由 `finishDailyWorkflow` 通知日常所有者；师门模块不再跨模块清理日常 Hook。
+- 调用链：`$daily` 保留“请安 → 日常 → tasks → 扫荡 → 续接命令”的原顺序和固定等待，但改为等待模块完成信号，并在会话代际变化后停止尾部续接，避免公开 Hook 被覆盖或清空时永久轮询。
+- 差异记录：参考源码只确认通用 `dialog=tasks/items[]` 结构；现网使用的 `signin`、追捕完成文案和程药发 `ask3` 与参考版本不完全一致，因此本批按原扩展协议和命令逐字保留，未依据参考源码改写。历史描述缺字段时的解析异常亦保持；模块会记录错误并取消本轮，避免 `$daily` 永久挂起。
+- 结果：`80-workflows-and-settings.jsfrag` 删除 160 行遗留实现，自动化聚合文件从 4,858 行降至 4,700 行。动态测试覆盖请安重复启动/取消、日常唯一 Hook、200ms 师门启动、小树林完成所有权、重置解除等待、扫荡重复启动、旧异步回调失效、完成清理和销毁；重新构建后 72 个 JavaScript 文件、65 个页面脚本及 24 个语义片段完整验证通过。尚未完成现网 Chrome 日常协议、慢速导航、追捕文本顺序、断线重连和角色切换实测。
+
+## 2026-08-21：清空导航任务片段并迁移物品清单、活动循环
+
+- 物品清单：新增 `features/plugin/inventory-list-settings.js`，迁移 `getItemNameByid/addstore/addlock/dellock/addfenjieid/adddrop`；角色 ID、背包快照、四组 CSV 配置和实时数组均由动态 accessor 获取，GM 存储、jQuery 输入框和消息输出改为显式上下文。保留 ID 宽松比较与重复回调、不去重 CSV、`addstore` 暂时覆盖普通仓库列表、只删除首个重复锁项、找不到锁项仍提示成功，以及仅按小写 `hio/hir/ord` 拒绝高级丢弃的历史行为。
+- 活动循环：新增 `features/plugin/activity-automation.js`，迁移共享 `timer_close`、武道塔/旧技能点击、学习状态检测和小树林循环；继续通过 `getWorkTimer/setWorkTimer` 共享单一历史 interval，保留 `tasks/signin` 协议、`kill/go up/go enter`、`cr yz/lw/shangu;cr over`、DOM 选择器、进度截取、小数/负数输入和 `this` 计数语义。
+- 生命周期：武道 Hook 使用 `!= null` 判断，Hook ID 为 0 时不再重复注册；模块用代际令牌保护自身 interval 回调。登录、WebSocket 断线、销毁或公开重置会清理共享 timer、武道 Hook 和 `fbnum/needGrove`，避免旧活动在新角色继续发送命令。断线入口直接调用 `resetActivityAutomation`，不增加轮询。
+- 遗留问题记录：武道进度先用 `进度([^%]+)，<` 捕获、再截取捕获值中的 `<`，对部分服务端描述可能得到空进度；`wudao_autopfm` 仍检查旧嵌套子 `span` 的 `left: 0px`，而当前 `client/modules/combat.js` 冷却显示使用外层元素 `background-size`。为保持本批迁移等价未夹带修复，后续应先用现网协议/DOM 复现，再做最小双格式兼容。
+- 结果：删除已清空的 `30-navigation-and-tasks.jsfrag` 及语义布局项，自动化聚合文件从 4,957 行降至 4,858 行，遗留语义片段从 25 个降至 24 个。动态测试覆盖角色存储键、CSV/锁项/高级丢弃、动态背包、武道唯一 Hook、任务对话、守护者/技能点击、学习启停、小树林命令/计数、共享 timer、旧回调失效和销毁；重新构建后 71 个 JavaScript 文件、64 个页面脚本完整验证通过。尚未完成现网 Chrome 武道、学习、小树林、清单 UI 和断线重连实测。
+
+## 2026-08-21：迁移命令传输核心
+
+- 迁移：新增 `features/plugin/command-transport.js`，迁出高频公开入口 `WG.Send/SendStep/SendCmd/sleep/stopAllAuto/reSetAllAuto/cmd_echo_button`；直连发送器、传输能力、NPC/房间/背包物品表、共享停止标记、`T` 命令引擎、控制台、jQuery、消息输出和计时器均改为显式上下文或动态 accessor。`30-navigation-and-tasks.jsfrag` 从 265 行降至 152 行，自动化聚合文件从 5,060 行降至 4,957 行。
+- 兼容：保留直连 `send_cmd(command, true)` 与隐藏 `[WG='WG']` 点击两条路径、分号优先于逗号的拆分规则、数组输入、尾随空命令、`%NPC%` 先于 `*物品*` 替换、`$fn arg`/末 token/第二 token 三种 `T` 分派及命中后立即返回的续接边界；`SendStep` 仍在每项（包括末项）后固定等待 12 秒，`SendCmd` 仍不等待 `T` 内部异步流程。
+- 边界：本批为行为等价迁移，保留历史 `eval` 解析及格式错误时抛异常的行为；通用 `sleep`/`SendStep` 仍是不可取消等待，后续应随具体工作流所有者逐项纳入代际生命周期，不能在传输层统一取消而改变大量调用方语义。
+- 验证：新增直连/回退发送、动态 NPC/房间/物品替换、分号/逗号拆分、三种 `$` 分派、显式计时器、逐项 12 秒等待、共享停旗、命令回显和销毁测试。重新构建后，69 个 JavaScript 文件、62 个页面脚本、Manifest/协议/存储/资源桥及 25 个语义片段完整验证通过。尚未完成现网 Chrome 原生点击回退、Raid/控制台 `$` 续接和炼药逐项发送实测。
+
+## 2026-08-21：迁移师门任务状态机
+
+- 迁移：新增 `features/plugin/master-task-automation.js`，迁出 `WG.doSmTask/smTask/sm_button/qu/sell_all_task` 以及 `sm_state/sm_item/sm_store/smbuyNum/lastBuy/ungetStore/kala_count/smhook/qu_hook` 兼容状态；门派、师门表、背包商品、仓库清单、角色设置、`Process`、jQuery、确认框、克隆和计时器均由显式上下文或动态 accessor 提供。`30-navigation-and-tasks.jsfrag` 从 556 行降至 265 行，自动化聚合文件从 5,294 行降至 5,060 行。
+- 兼容：保留状态 0–5 的 DOM 扫描、接任务命令连续发送两次、所有 `WG.go()` 非等待时序、仓库响应后 300ms 才推进、令牌颜色优先级和最多六项扫描；购买分支继续保留 `(sm_state = 0) == smbuyNum`、对象宽松比较及字符串计数等历史副作用，`sell_all_task` 的旧命令和 `Process.leve` 拼写也未改动。
+- 生命周期：重复 `smTask()` 复用唯一循环；手动停止、终止文本、登录、断线和销毁会使旧代际失效，清理师门/取仓 Hook、循环等待和 300ms 回调。WebSocket `onclose` 直接调用会话重置，避免轮询窗口；重置还清除师门临时物品、购买计数和遗留日常 Hook，旧取仓回调不会写入新角色状态。
+- 验证：新增状态 0/1/3、双发命令、宽松比较副作用、取仓命令与 300ms 完成时序、重复启动、手动停止、终止文本幂等、取仓取消、跨角色重置和销毁动态测试，并静态锁定断线重置入口。重新构建后，68 个 JavaScript 文件、61 个页面脚本、Manifest/协议/存储/资源桥及 25 个语义片段完整验证通过。尚未完成现网 Chrome 师门接取、购买、钱庄取物、断线重连和角色切换实测。
+
+## 2026-08-21：迁移客户端房间渲染模块
+
+- 迁移：新增 `client/modules/room-renderer.js`，迁出 `Process` 的宽度/数值/玩家名称格式化、人物增删与全量渲染、房间信息、隐藏命令、出口渲染/点击和当前房间查询；`40-protocol-process.jsfrag` 保留原 `Process` 对象，在对象创建后用显式 getter 上下文创建模块并挂回原公开方法。`client/game-client.js` 从 9,531 行降至 9,280 行。
+- 兼容：保留玩家始终置顶、`off_plist/off_hp/show_hpnum/show_roomitem/exits_dir`、血蓝 DOM 顺序和千分位、黄色 `★` 插入位置、同 path 提前返回、隐藏命令对协议对象原地追加、出口对象身份及 `MAP.CreateExitsMap` 的原地变换、出口 `go <dir>` 命令；模块内部仍通过 `Process.create_roomitem/countwidth/formatStatusNumber/formatRoomItemName/searchItems` 分派，保持历史公开方法可覆盖性。DOM 委托事件继续只由 `00-dom-bootstrap.jsfrag` 注册一次。
+- 缺陷与生命周期：原 `Process.items()` 直接执行 `Combat.STATUS = {}`，会丢掉状态项引用，但 Combat 私有集合中的 `StatusItemANI` 计时器仍可能跨房间继续调度。现新增 `Combat.ClearStatusTarget/ClearRoomStatus`，只清理房间状态动画，不影响技能冷却、动作或战斗面板；断线、跨服、角色 ID 变化和返回服务器页会调用 `resetRoomRendererSession`，清除详情弹窗、共享正则偏移及 `cur_room/room_path/room_exits/room_name` 逻辑快照，避免旧角色同路径短路新房间更新。
+- 验证：新增宽度/数值边界、公开方法分派、人物过滤与置顶、血蓝 DOM、隐藏命令、房间更新顺序、同路径短路、文本/SVG 出口、协议对象原地变换、出口命令、房间查询、会话重置和 Combat 状态计时器动态回归测试。重新构建后，67 个 JavaScript 文件、60 个页面脚本、Manifest/协议/存储/资源桥及 25 个语义片段完整验证通过。尚未完成现网 Chrome 房间切换、跨服、断线重连和角色切换实测。
+
+## 2026-08-21：迁移导航核心、仓库/包裹整理、衙门追捕与 Raid 编译器
+
+- 导航核心：新增 `features/plugin/navigation-core.js`，迁移 `WG.go`、`WG.at` 和 `WG.getIdByName`；`roomData/place/needfind/saveAddr` 改由动态 accessor 注入。保留住宅模式下钱庄映射到卧室、需要巡查的地点不被当前房间短路、`.room-name` HTML 判断及路线执行期间的 `G.ingo` 时序。
+- 仓库整理：新增 `features/plugin/warehouse-sorting.js`，迁移 `WG.sort_all`、`WG.sort_all_bag` 和 `WG.sort_hook`；保留颜色分组、物品名称长度排序、命令等待间隔、完成提示与 `look3 1` 刷新。重复启动、登录变化、完成和销毁都会清理唯一 Hook。
+- 包裹整理：新增 `features/plugin/inventory-cleanup.js`，迁移 `WG.sell_all`、`WG.packup_listener` 和 `WG.packup_ready`；存仓、丢弃、锁定和分解清单改由动态 legacy accessor 注入，保留仓库存量上限、原命令顺序及历史星标判断。重复启动、完成、登录变化和销毁都会清理唯一 Hook。
+- 衙门追捕：新增 `features/plugin/yamen-automation.js`，迁移接取、告示解析、附近巡查、目标击杀和全部旧 `WG` 公开字段；jQuery、消息输出、计时器、命令 API、路线及 NPC/地点状态改为显式上下文。任务检查和目标轮询由模块独占并使用代际令牌，登录变化或销毁时清理；无逃犯时仍保留历史 `WG.check_yamen_task = "over"` 契约。
+- Raid 编译：新增 `features/plugin/raid-flow-compiler.js` 服务，迁移源码切分、预编译规则中心、注释/子流程/guard/`@call`/兼容语法和控制流编译；`features/raid-flow-engine.js` 通过延迟 `FlowStore` getter 和消息回调创建服务，减少 421 行重复编译实现。
+- Raid 存储：新增 `features/plugin/raid-flow-storage.js`，迁移 `PersistentCache`、`FlowStore`、`PersistentVariables`、旧命令组/工作流管理、`CodeTranslator` 和 `WorkflowConfig`；角色 ID、GM 存储和提示接口改为显式上下文。保留 `flow_store@null/global_params@null` 回退、全部历史键、`FlowStore.corver` 拼写、同步对象可变性以及持久变量在 `VariableStore` 中的原注册顺序；`features/raid-flow-engine.js` 进一步降至 5,320 行。
+- 验证：新增导航住宅映射/到达短路/巡查例外/动态房间快照、仓库命令顺序、包裹存仓/分解/出售/丢弃及生命周期、衙门 Hook/计时器/解析/角色重置/击杀、Raid `@call`/兼容规则/条件编译，以及角色 A/B/空角色存储隔离、旧命令组/工作流树/原地名称转换动态回归测试。主审补回了抽取时遗漏的 `PersistentVariables → VariableStore` 注册。重新生成聚合文件后，66 个 JavaScript 文件、59 个页面脚本、Manifest/协议/存储/资源桥及 25 个语义片段完整验证通过。尚未完成现网 Chrome 导航、仓库/包裹整理、衙门追捕和 Raid 流程/角色切换实测。
+
+## 2026-08-21：迁移地图、工具栏、Trigger UI 和物品命令辅助
+
+- 客户端地图：新增 `client/modules/map.js`，迁移 `CreateHeadPanel`、`MAP`、SVG 地图、模态框、缓存和自动寻路；`55-map.jsfrag` 缩为 12 行创建桥。保留出口对象原地转换、地图协议字段、DOM/ARIA、`map/go` 命令和当前版本的地图解析差异。
+- 地图生命周期：保留 5 秒移动超时和 80ms 出口推进时序，同时追踪并在取消路线或 `destroy()` 时清理延迟推进计时器，避免旧路线回调推进新路线。
+- 客户端工具栏：新增 `client/modules/tool-action.js`，迁移 `ToolAction` 横向菜单、无障碍属性和未读标记；`20-command-dispatch.jsfrag` 保留原位置创建桥。
+- Trigger：新增 `features/plugin/trigger-ui.js`，迁移 `TriggerUI`、`TriggerConfig`、Vue DOM、分享和 GM 配置；`features/trigger-system.js` 降至 128 行初始化/角色生命周期入口。重复渲染和服务销毁会调用 Vue `$destroy()`。
+- 自动化：新增 `features/plugin/item-command-helpers.js`，迁移 `WG.buy/Give/eq/ask/kill_all/get_all/clean_all`，NPC、装备和 jQuery 改为显式上下文；`30-navigation-and-tasks.jsfrag` 从 923 行降至 889 行。
+- 验证：新增 MAP 路线/出口副作用/命令/计时器、ToolAction 菜单与标记、Trigger UI Vue 生命周期、物品辅助命令动态烟测；重新构建后完整验证通过。尚未完成现网 Chrome 地图寻路、Trigger 编辑、工具栏和自动化命令实测。
+
+## 2026-08-21：迁移婚宴、房间状态与客户端 Combat
+
+- 自动化：新增 `features/plugin/wedding-automation.js` 和 `room-state-bridge.js`，迁移 `WG.xiyan`、`WG.marryhy`、`WG.saveRoomstate`；删除空的 `70-items-bosses-and-medicine.jsfrag` 及其语义布局条目，剩余语义片段降至 25 个。
+- 生命周期：婚宴使用独立计时器和代际令牌，重复启动、手动关闭、超时、角色切换/重连和模块销毁均清理旧 Hook；完成清理后显式将 `WG.marryhy` 置空，使 `$xiyan` 等待能够结束。房间状态只保留一个 `items` Hook，并同步内部 `roomData` 与公开引用。
+- 客户端：新增 `client/modules/combat.js`，迁移战斗面板、动作、绝招冷却、血蓝条、伤害和状态效果；`50-combat.jsfrag` 缩为 `Warn`/`Combat` 创建桥，`SendCommand`、`Setting`、`Process`、`Dialog` 和计时器改为显式上下文或延迟 getter。
+- 兼容：保留 `Combat` 对象身份、全部公开方法与状态、`UpdaeBar` 历史拼写、`On_Perform` 对协议对象的原地修改、当前扩展版本的动作重建和物品冷却行为；未机械引入 `wsmud2/src/combat.js` 中与当前片段不同的实现。
+- 验证：新增婚宴重复启动/login/礼桌/贺礼/超时/关闭/销毁、房间快照以及 Combat 动作/冷却/定时器专项烟测；完整构建验证通过。尚未完成现网 Chrome 婚宴、角色切换、战斗动作和状态协议实测。
+
+## 2026-08-21：迁移触发器协议监控服务
+
+- 修改：新增 `features/plugin/trigger-monitors.js`，迁移触发器历史模板、Buff/聊天/战斗/状态/时辰/技能/气血内力/伤害等协议监控 Hook；`features/trigger-system.js` 仅保留兼容桥、管理 UI、配置和初始化。
+- 兼容：保持模板名称、过滤器、通知字段、协议 Hook 类型、通知逻辑、公开 `TriggerUI`/`TriggerConfig`/`TriggerCenter` 和首次登录时序；服务接受显式 `triggerCore`、事件总线、WG/角色 accessor、计时器和 Date 上下文。
+- 生命周期：`start()`/`run()` 幂等注册并保存全部 Hook ID；`stop()` 移除自身 Hook、清理时辰递归计时器和技能冷却计时器及人物缓存；`resetForRole()` 清理后按新角色重新注册，且不触碰全局事件总线 observer。初始化重试改为单一计时器并只注册一次 `login` Hook，重复登录同一角色不重载，角色变化时重载角色触发器和监控。
+- 验证：新增监控服务动态烟测，覆盖模板、首次启动幂等、Buff 通知字段、计时器保存、停止清理及角色重启；重新生成运行文件并通过完整扩展验证；尚未完成现网浏览器登录、切换角色和真实协议实测。
+
+## 2026-08-21：迁移自定义快捷按钮模块
+
+- 修改：将 `WG.zdybtnfunc`、`WG.zdy_btnset`、`WG.zdy_btnListInit` 和 `WG.zdy_btnshow` 从 `80-workflows-and-settings.jsfrag` 迁入 `features/plugin/custom-command-buttons.js`。
+- 兼容：保留 `WG` 公开方法、Q/W/E/R/T/Y 键位、`.WG_button`、`.WG_log`、`#keyinQ` 至 `#keyinY`、自动攻击/命令回显入口、原生按钮文案及 `_zdy_btnlist`/`_inzdy_btn` 存储键；角色闭包状态通过显式 accessor 读写。
+- 生命周期：按钮和设置保存事件使用模块命名空间，重绘前清理旧按钮，`destroy()` 清除模块创建的按钮和保存事件，避免重复绑定。
+- 验证：重新生成自动化聚合文件并运行完整扩展验证；尚未完成现网 Chrome 登录、切换角色和快捷键实测。
+
+## 2026-08-21：迁移触发器领域核心服务
+
+- 修改：新增 `features/plugin/trigger-core.js`，迁移触发器通配匹配、Filter/Template、Trigger/TriggerData 和 `TriggerCenter` 持久化管理；服务通过显式 `eventBus`、角色 ID、执行器、存储和日志上下文创建。
+- 兼容：`features/trigger-system.js` 保留原加载位置、监控/UI/初始化逻辑以及 `TriggerUI`、`TriggerConfig`、`TriggerCenter` 全局发布；保留 `corver` 拼写、`<角色>@triggers` 存储键、名称校验文本、旧聊天字段补齐和事件总线 observer 行为。
+- 验证：新增 Trigger 核心服务动态烟测，覆盖通配、模板、条件、命令变量注入、启停、导入、删除和角色存储；尚未完成现网浏览器实测。
+
+## 2026-08-21：迁移装备套装助手模块
+
+- 修改：将 `haspack`、`eqhelper`、`eqhelperdel`、`uneqall`、`eqloader`、`eqhelperui` 及 `eqx/eqxp` 临时 Hook 生命周期从 `70-items-bosses-and-medicine.jsfrag` 迁入 `features/plugin/equipment-loadouts.js`。
+- 兼容：保留 `WG` 公开 API、`_eqlist`/`_skilllist` 存储键、jQuery Deferred 菜单返回值、Vue 套装管理页、原有装备/技能命令、剪贴板复制和 `boss-hunter`/命令引擎调用方；旧角色状态通过显式 accessor 读写。
+- 生命周期：模块销毁时清除装备/技能保存 Hook、脱装 Hook、Deferred/UI 定时器和 Vue 实例；重复操作前清理同名临时 Hook。
+- 验证：重新生成自动化聚合文件并运行完整扩展验证；尚未完成现网 Chrome 套装保存、装备、技能、脱装和右键菜单实测。
+
+## 2026-08-19：启动全扩展分批模块化
+
+- 边界：重构范围扩展到整个 `WSMudEX`，包括插件自动化与扩展内置的游戏前端客户端；不修改 `wsmud2/` 服务端或参考源码。
+- 直接模块加载：删除生成文件 `features/plugin-modules.js`，`features/plugin/*.js` 现按明确顺序直接注入页面，源码即运行单元。
+- 自动化第一批：远程配置、推送、语音、提示音和乐谱播放迁入 `features/plugin/notification-services.js`，删除 `96-remote-services.jsfrag`。
+- 独立单文件第一批：角色切换迁入 `features/plugin/role-switcher.js`，不再作为独立遗留入口加载。
+- 客户端第一批：新增 `client/core.js` 模块注册器，底部警告栈迁入 `client/modules/warnings.js`，删除 `45-warnings.jsfrag`；保留历史 `Warn.Elemes/Show/Close/Settop` 契约。
+- 客户端后续批次：触摸手势、登录视图/本地存储、分页消息队列与消息分发分别迁入 `client/modules/touch.js`、`view-storage.js`、`message-queue.js`；删除对应 `58`、`99`、`30` 语义片段。
+- 自动化状态批次：`G` 状态镜像迁入 `features/plugin/automation-state.js`，由插件内核的显式服务工厂创建，删除 `92-state-model.jsfrag`。
+- 自动化业务批次：数据维护、训练计算、自动战斗、工具箱与定时任务迁入对应的 `data-maintenance.js`、`training-calculators.js`、`combat-automation.js` 和 `toolbox-scheduler.js` 模块。
+- 自动化服务批次：原 `UI` 模板迁入 `ui-templates.js`，自定义按钮、物品锁和 Raid 能力改为显式接口；原 `T/ProConsole` 迁入 `command-engine.js`，房间、背包、监控、语音和 Raid 等依赖改为显式桥接。删除对应 `90` 与 `85` 语义片段。
+- 验证：每批均重新生成剩余遗留主体并运行完整扩展验证；新增警告栈、触摸计算、存储序列化、消息分发、自动化状态、UI 模板与命令续接解析动态测试。当前 38 个 JavaScript 文件、31 个页面脚本加载顺序及 26 个剩余语义片段通过验证；尚未完成现网浏览器连服实测。
+
+## 2026-08-19：修复模块化 UI 外壳挂载对象错误
+
+- 现象：进入角色后左右侧栏、插件悬浮按钮和悬浮面板均未创建；各插件模块与聚合文件的静态校验仍显示正常。
+- 差异与根因：重构后的 `ui-shell` 将 `wgui()` 安装到了 `WG`，但登录流程的稳定调用契约仍是 `UI.wgui()`。现网浏览器触发 `WG.login()` 时因此抛出 `TypeError: UI.wgui is not a function`，后续全部界面初始化被同步中断。原动态烟测错误地调用 `WG.wgui()`，恰好重复了重构中的错误对象归属，未覆盖真实登录调用方。
+- 修改：`ui-shell` 改为向显式注入的 `UI` 上下文安装 `wgui()`；验证器改为断言 `UI.wgui()` 可用且不向 `WG` 泄漏该 UI API，并继续检查生成内容包含左右栏、装备弹窗、首轮弹窗和悬浮面板。
+- 验证：已重新生成运行包并通过完整扩展校验；使用当前扩展目录加载真实游戏入口并主动触发登录初始化，确认修复前稳定抛出上述异常，修复后登录初始化成功，左右栏、悬浮按钮和悬浮面板各创建一次，点击悬浮按钮可将面板从 `display:none` 切换为 `display:flex` 且同步 `aria-expanded=true`。
+
+## 2026-08-19：修复模块迁移后两侧面板未加载
+
+- 现象：进入游戏后左右侧栏均未创建。
+- 根因：第一版将多个嵌套插件模块作为独立页面脚本依次注入；加载器遇到单个扩展资源失败仍继续执行，自动化主体可能在 `ui-shell` 或 `layout-controls` 未注册时进入半初始化状态，原验证只分别执行源码模块，没有覆盖真实注入产物。
+- 修改：源码继续按功能模块维护，但同步工具统一生成根级 `features/plugin-modules.js`，页面只注入这一份运行包；自动化主体安装前硬校验六个必需功能，禁止缺模块时继续初始化。增量 CSS 改用明确声明的页面可访问资源路径。
+- 验证：新增运行包逐字一致检查，并直接执行真实生成包，确认安装后 `UI.wgui()` 同时包含左右侧栏、装备弹窗和首轮弹窗。完整扩展验证通过；仍需现网 Chrome 复测。
+
+## 2026-08-19：后续插件增量代码完成模块化迁移
+
+- 范围：只重构浏览器插件代码，不改动 `client/game-client.js` 及 `sources/game-client/`。
+- 架构：新增 `features/plugin/core.js` 模块内核，功能通过名称注册，并在自动化兼容主体启动前接收显式 `WG/G` 上下文完成安装；支持重复安装保护和逆序销毁。
+- 完整迁移范围：插件设置、侧栏仪表盘、装备选择与缓存、智能换装、智能回家/师父、组队共鸣、衙门追捕传送、智能挂机、首轮出招、右栏聊天、侧栏尺寸、横向菜单、悬浮面板及其 UI 壳和视觉样式。
+- 模块：上述功能分别迁入 `dashboard-equipment.js`、`navigation-enhancements.js`、`auto-first-round.js`、`layout-controls.js`、`ui-shell.js`、`plugin-settings.js` 和 `plugin-enhancements.css`。原 `40-dashboard-and-equipment.jsfrag`、`45-plugin-settings.jsfrag` 删除，其他片段中的对应增量区段也已移除。
+- 兼容边界：原自动化主体只保留登录和协议事件对模块 API 的窄适配调用；动态角色、旧配置、物品和装备状态通过只读 legacy accessor 注入。游戏客户端和原插件遗留业务不迁移。
+- 迁移审计修正：专项旧闭包扫描发现装备选择仍直接引用 `packData`，自动挖矿仍直接读写共享 `timer`；拆成独立脚本后这两个绑定不可见，会在背包回退或重新启动挖矿时抛出 `ReferenceError`。现分别改为 `getPackData`、`getWorkTimer/setWorkTimer` 显式 accessor，并将 `messageAppend` 作为模块依赖注入；验证器新增旧闭包变量泄漏检查和背包回退动态测试。
+- 约束：插件新增功能不得使用 `.jsfrag`；游戏客户端的语义片段机制保持原样。
+- 验证：新增全部增量模块注册与显式上下文安装动态烟测；当前生成运行包后共 26 个 JavaScript 文件语法、12 个页面脚本加载顺序、Manifest/协议/资源、动态内容脚本桥和 37 个剩余语义片段均通过完整验证。尚未完成现网浏览器实测。
+
+## 2026-08-18：新增衙门追捕传送命令
+
+- 新增原生扩展动作 #wg yamen：前往扬州城衙门正厅，找到程药发接取追捕任务，并执行服务端提供的 goto yamen2“过去”命令传送到逃犯位置。
+- 不再依赖任务描述文本解析或插件自维护的地点寻路；后续击杀仍由玩家或其他自动战斗功能负责。
+
+## 2026-08-17：修复首次默认聊天未迁移到右侧
+
+- 现象：进入游戏时聊天面板会自动打开，但频道内容仍停留在底部聊天区域，没有进入右侧聊天栏。
+- 根因：自动化套件先于游戏客户端初始化右侧聊天视图；首次打开时 Process.ChannelElement 尚未建立，后续 Process.init() 只缓存频道元素，没有再次执行右侧挂载。
+- 修改：Process.init() 完成频道元素和消息队列初始化后，如果右侧聊天仍处于开启状态，立即重新调用右侧面板挂载逻辑，将频道内容移动到右侧；用户后续手动关闭/打开行为不变。
+- 验证：语义源码已重新生成并通过扩展完整验证；尚未完成现网浏览器登录时序实测。
+
+
+## 2026-08-17：商城活动货币页签按服务端数据动态显示
+
+- 现象：商城服务端返回活动货币和第三组商品时，商城底部仍只有“黄金、元宝”两个选项，活动商品无法切换查看。
+- 根因：商城页签、第三组商品和第三种货币的前端处理被固定为两组，未兼容协议中的第三组 `selllist`、`money[2]` 与 `mtype`。
+- 修改：收到服务端返回的第三种货币或第三组商品时动态加入“活动”页签，按 `mtype` 显示活动货币名称和商品价格；普通商城数据返回时自动移除活动页签并校正当前选中项。未知活动不依赖活动名称白名单，沿用服务端下发的数据。
+- 验证：语义源码已重新生成并通过扩展完整验证；尚未完成现网活动期间浏览器实测。
+
+
+## 2026-08-16：右侧聊天栏首次默认开启
+
+- 现象：右侧聊天视图创建完成后固定调用关闭逻辑，玩家每次进入页面都只能先看到右侧黑色占位，需要再点一次原生聊天按钮。
+- 修改：聊天视图首次创建时直接开启；若同一页面内已经存在聊天视图，则保留它初始化前的开关状态。因此用户手动关闭后，角色仪表盘或布局再次初始化不会擅自重开。原生聊天按钮和右栏关闭按钮的切换逻辑保持不变。
+- 验证：新增首次创建默认开启与既有状态保留的静态契约；语义源码已重新生成，完整扩展验证通过。尚未完成现网浏览器实测。
+
+## 2026-08-16：原生自动攻击按钮显示开启状态
+
+- 现象：`#wg auto` 可以切换自动攻击，但原生扩展栏按钮开启和关闭时外观相同，无法直接判断当前状态。
+- 修改：只识别动作栏内命令严格为 `#wg auto` 的按钮。开启后直接保持游戏原生 `:active` 样式：`gray/#808080` 背景和黑色文字，并同步 `aria-pressed=true`、无障碍名称与“自动攻击：已开启”悬停提示；关闭后恢复普通样式和“已关闭”提示。底部原生按钮、插件总设置、旧设置及脚本启停命令均调用同一状态同步函数；场景或扩展设置导致动作栏重建时，由原生客户端重建末尾重新同步。
+- 视觉依据：用户截图中的按下按钮主色经取样为 RGB `(128, 128, 128)`，与参考客户端原生规则 `background-color: gray; color: black` 一致；开启态不再使用额外亮边、发光或浅色文字。
+- 兼容：不修改游戏的 `extends` 配置，不依赖按钮显示名称，因此用户自行改名仍可识别；其他原生扩展动作不会受样式影响。
+- 验证：语义源码已重新生成并通过语法检查；专项模拟确认开启时仅 `#wg auto` 高亮，关闭时恢复且提示同步。完整扩展验证通过。尚未完成现网浏览器视觉实测。
+
+## 2026-08-16：挂机、师父与回家动作前智能换装
+
+- 需求：挂机先选择当前潜能收益最高的活动并装备对应工具；去师父前换成实际学习速度最高的整套装备；回住宅或客栈前换成悟性最高的整套装备，同时避免每次重复读取所有装备详情。
+- 规则依据：学习选择按服务端实际乘数的等价式“（先天悟性 + 后天悟性）×（100 + 学习效率）”比较完整装备组合，不能只比较悟性或单件装备。回家只比较整套装备的悟性总和。挂机先完成活动收益排序，再按目标活动选择最高品级工具：采药为《药王神篇》/《神农百草经》，挖矿为铁镐/移山镐，钓鱼为钓鱼竿；同品级优先保留已装备物品。
+- 修改：新增原生动作 `#wg master`。`#wg home` 与 `#wg master` 会静默读取背包、已装备物品及角色属性，解析各物品的装备栏位、悟性和学习效率，以各栏位候选的帕累托前沿搜索完整组合，再依次发送原生 `eq`，完成后才执行原动作。`#wg work` 在确定最高收益活动后换好对应工具再开工。
+- 缓存：装备详情按角色保存到 `<角色>_WG_smart_equipment_details_v1`，以物品 ID、原始名称和品阶共同校验，有效期 10 分钟；未变化时复用 `checkobj` 解析结果，但每次仍按最新角色属性重算最优组合。新增、改名、品阶变化、移出背包或缓存过期时仅刷新受影响项。按角色分别延迟写入固定快照，避免快速切换角色串写。正式套装的件数加成暂不计入，避免在协议未可靠提供套装归属时误算。
+- 原生配置：原“师父处”命令由 `goto fam1` 改为 `#wg master`；“回家”继续使用 `#wg home`，“挂机”继续使用 `#wg work`。
+- 验证：语义源码已重新生成并通过语法检查；专项验证覆盖属性解析、学习乘积最优、悟性最优、三类挂机工具选择以及缓存命中和品阶变化失效。完整扩展验证通过。尚未完成现网浏览器实测。
+
+## 2026-08-16：原生扩展栏补充自动攻击与智能回家
+
+- 需求：自动攻击也需要像其他原生扩展项一样放入底部动作栏；回家需要在已购房时回住宅、未购房时自动改去客栈。
+- 协议依据：参考服务端的 `goto home` 在已购房时进入 `home/...`，未购房时下发 `yz/home`（住宅大门）并提示购房。两类结果可通过结构化 `room.path` 区分，无需依赖提示文本或固定网络延时。
+- 修改：新增 `#wg auto`，直接复用现有 `auto_preform_switch`，每次点击切换自动攻击开关；新增 `#wg home`，先发送原生 `goto home`，若房间结果为住宅则结束，若确认落到住宅大门则调用现有导航前往“扬州城-有间客栈”。智能回家 Hook 具有 10 秒超时，重复点击会先清理旧 Hook 和计时器，避免失败或延迟响应干扰后续移动。
+- 原生配置：自动攻击使用 `#wg auto`；原“回家”项应将 `goto home` 替换为 `#wg home`。
+- 验证：语义源码已重新生成，扩展完整验证通过；专项行为模拟确认住宅分支不转向、未购房分支前往客栈，并会清理 Hook 与计时器。尚未完成现网浏览器实测。
+
+## 2026-08-16：右侧动作迁移到游戏原生扩展栏
+
+- 现象：右侧栏重复维护回家、师父处、武庙、清理背包、挂机等动作，与游戏“设置 → 扩展”可添加到动作栏的原生能力重叠；中间信息区还额外存在一个自定义聊天按钮。
+- 差异与根因：`goto home`、`goto fam1`、`store` 可由游戏原生命令直接完成；武庙选路、清理背包和智能挂机包含扩展内状态判断与异步流程，不能只替换为一条服务端命令。游戏原生扩展项只负责保存和触发命令，不会自动获得浏览器扩展内部函数。
+- 修改：删除右侧全部动作按钮及其点击入口，但保留右侧黑色栏、现有宽度和拖动调整；关闭聊天后右侧仅为空白占位。移除中间信息区左上角的自定义聊天按钮，保留游戏原生聊天按钮并由其切换右栏聊天。新增 `#wg wumiao`、`#wg cleanup`、`#wg work` 三个窄桥接命令，分别复用原有武庙、清包和智能挂机完整逻辑；不写入或覆盖游戏原生 `extends` 配置。自动攻击开关及首轮出招顺序入口迁入插件总设置。
+- 原生配置：回家、师父处、仓库分别使用 `goto home`、`goto fam1`、`store`；所有动作由用户在“设置 → 扩展”中按角色手动启用。
+- 验证：语义源码已重新生成，扩展完整验证通过；命令解析确认 `#wg <动作>` 会把首个参数交给桥接函数。尚未完成现网浏览器实测。
+
+## 2026-08-16：拍卖行倒计时按秒实时刷新
+- 现象：拍卖列表中的剩余时间停留在最近一次服务端列表或拍品消息到达时的数值；关闭再打开只会复用原 DOM，并不会重新请求或重算时间，因此显示仍不变化。
+- 差异与根因：服务端下发的是拍品当时的剩余毫秒数；原前端只在生成拍品 HTML 时调用一次 `format_time_span`，没有保存截止时间或启动刷新计时器。
+- 修改：渲染拍品时将剩余毫秒数转换为本地绝对截止时间，使用拍卖行唯一的计时器每秒按 `截止时间 - Date.now()` 重算，避免计时器延迟累积；不足一小时显示“分秒”，超过一小时显示“时分秒”。关闭拍卖行或切换页面时清理计时器，重新打开时恢复，服务端拍品更新会校准对应截止时间。
+- 二次修正：第一版在完整列表每次重建时都用 `Date.now() + 缓存剩余时长` 创建新截止时间，导致关闭重开后旧时长重新起跑。现按拍品 ID 持久保存截止时间；完整列表对已有拍品只能复用截止时间，不能再次起算。只有明确的 `item` 增量更新才可强制校准（包括竞价延时）。
+- 验证：语义源码已重新生成，扩展完整验证通过；专项模拟确认相同或不同的缓存剩余值重复渲染均不会重置截止时间，增量更新可延后校准，旧完整列表不会覆盖增量校准，关闭重开会按绝对截止时间继续并最终归零。尚未完成现网连服实测。
+
+## 2026-08-14：智能挂机在线期间动态复核最高潜能收益
+- 现象：原逻辑只在服务端再次推送挖矿、采药或钓鱼状态时复核活动收益，没有持续检查。挂机开始后若活动加成发生变化，角色可能一直留在旧地点。
+- 根因：`handlePotentialWorkState` 只有状态消息触发和 5 秒防抖时间戳，没有拥有挂机生命周期的定时器；活动查询超时还会用空活动列表继续排序，可能错误降级到挖矿。
+- 修改：进入三类潜能挂机状态时立即检查一次，并在前台连接在线、游戏自动操作开启且状态不变时每 5 秒静默查询 `events`。出现严格更高的正收益项才停止当前状态并重新选址，并列最高时保持当前地点；断线、换角色、停挂机、进入其他状态或关闭自动操作时清理定时器及待处理 Hook。周期查询超时保留当前地点，避免网络抖动导致误切换。
+- 验证：新增行为模拟，覆盖首次状态立即检查、同状态消息不重复启动轮询、5 秒静默复核和断线清理；完整扩展验证通过。尚未完成现网连服下跨活动时段的自动切换实测。
+
+## 2026-08-14：右栏聊天上下按钮压缩为单行
+- 现象：右栏聊天上方 7 个历史筛选按钮占三行，下方 6 个发送频道按钮占两行，明显压缩中间聊天记录区域。
+- 修改：上方筛选改为 7 等分单行，下方发送频道改为 6 等分单行；两组按钮统一减小字号、内边距和间隔。同时压缩标题/返回按钮、组件间距、输入框高度与发送按钮宽度，把空间让给聊天记录区。
+- 验证：Chrome 在 260×500 右栏尺寸下使用真实样式渲染。上下按钮组的纵坐标集合均只有 1 个值，实际高度分别约 18.8px 和 19.2px；标题栏约 29.7px、输入栏约 30.1px，中间聊天记录区约 371.4px。语义同步与完整扩展验证通过。
+
+## 2026-08-14：中间聊天按钮改为右栏双向开关
+- 需求澄清：目标入口是中间信息区原有的聊天记录展开/收起按钮，不是底部聊天输入弹窗。保留该按钮，但不再在中间展开聊天记录。
+- 修改：`.WG_chat_drawer_shell` 通过样式和运行时 `.hide()` 永久隐藏，聊天高度拖动柄移除；原按钮改为调用 `toggleSideChatPanel`。首次点击将聊天记录和独立输入组件显示在右栏并隐藏快捷键栏，按钮显示“关闭”；再次点击将聊天记录放回隐藏容器、关闭右栏聊天并恢复快捷键栏，按钮恢复“聊天”。原生底部 `.chat-panel` 继续永久停用。
+- 验证：Chrome 使用参考游戏 DOM 初始位置加载 11 个真实交付脚本。初始状态中间容器为 `display:none`；第一次点击后记录父节点为 `WG_side_chat_history_host`、右栏快捷键不可见；第二次点击后记录父节点回到隐藏的 `WG_chat_drawer_shell`、快捷键恢复。全过程中间容器始终 `display:none`，页面错误为 0。
+
+## 2026-08-13：停用原生聊天悬浮窗，重建独立右栏聊天
+- 现象：此前方案仍复用游戏原生 `.chat-panel`，只是在打开时尝试把它移动到右栏。任何入口初始化或事件顺序不一致，都会再次执行原生底部悬浮显示，用户看到的仍是旧逻辑。
+- 修改：原生 `.chat-panel` 现在标记为 `WG_legacy_chat_panel` 并通过 `display: none !important`、禁用指针和隐藏可见性永久停用。右栏重新建立独立的频道选择、输入框和发送按钮，直接使用 `SendCommand` API 发送世界、队伍、门派、房间、全区和帮派消息，不再移动或显示原生聊天面板。原生聊天入口在捕获阶段被接管，旧冒泡点击处理不会执行；聊天记录独立移动到右栏，返回时精确归位。
+- 验证：Chrome 按清单加载 11 个真实交付脚本，并故意额外挂回“点击后显示旧 `.chat-panel`”的旧处理器。点击聊天后旧处理器调用次数为 0，旧面板始终 `display: none` 且父节点未改变；右栏动作区隐藏、新聊天组件显示；选择门派并发送“测试消息”得到命令 `fam 测试消息`；返回后动作区和聊天记录恢复，页面错误为 0。
+
+## 2026-08-13：聊天记录弹窗改为右侧栏切换
+- 现象：点击聊天记录区仍会打开原生 `Dialog.channel` 页面；仅接管底栏 `ShowChat` 输入弹窗不会改变该操作。
+- 根因：聊天记录区实际绑定 `Process.ChannelElement → Dialog.channel.show`，与底栏聊天输入入口不同。第一版接错了入口。
+- 二次复查根因：此前测试夹具预先创建了聊天侧栏及其 API，掩盖了真实加载时序。实际页面可能先加载扩展脚本、登录后才创建右侧动作栏；此时 `WGOpenSideChatPanel` 尚未导出，`ShowChat` 会静默回退到原生聊天悬浮窗，所以右栏保持不变。此前为处理层级而调用通用 `Dialog.hide()` 也属于错误耦合，会干扰同时存在的普通弹窗。
+- 修改：所有聊天入口统一为“确保初始化并打开右栏聊天”，不再使用 toggle，不再回退原生 `.chat-panel` 悬浮显示，也不再关闭或接管通用 `Dialog`。如果右栏晚于脚本出现，首次点击会惰性创建聊天视图并导出 API。`#menu showchat` 仍排除在普通弹窗层请求之外。聊天记录和输入面板分别保存原始 DOM 位置标记，点击返回时精确归位。
+- 验证：使用 Chrome 按扩展清单顺序加载 11 个真实交付脚本，特意复现“脚本加载时 API/聊天视图不存在，随后右栏才出现”。原生聊天按钮点击后动作区隐藏、聊天视图显示、输入面板进入 `WG_side_chat_panel_host`；聊天记录点击进入 `WG_side_chat_history_host`；已有普通悬浮弹窗时 `Dialog.hide()` 调用次数为 0 且原弹窗保持显示；页面脚本错误为 0。语义同步与完整扩展验证同时通过。
+
+## 2026-08-13：人物完整查看恢复真实 `look`，明确协议边界
+- 现象与影响：上一版把人物操作窗内的 `look <id>` 改成 `select <id>` 后，虽然能生成结构化子窗，但只能看到操作摘要与房间快照，缺少正常 `look` 才有的年龄、容貌、武学评价、伤势状态和装备信息。
+- 协议差异：参考服务端的 `look <id>` 通过 `notify` 返回无请求 ID 的纯文本；`select <id>` 只返回带 `type=item` 的操作数据，二者不是等价接口。现有网页 API 也只把非 JSON WebSocket 帧归类为普通 `text`，没有响应 ID 可用于安全关联。
+- 根因：为规避公共信息流误截取，上一版错误地用可关联但信息不完整的 `select` 替代了真实 `look`。
+- 修改：撤回该替代逻辑。人物操作窗内点击“查看”会原样发送真实 `look <id>`，完整结果按游戏原行为显示在主信息栏；人物操作窗保持打开，并显示“完整人物信息已显示在信息栏”的就地提示。不会建立详情请求、不会打开伪详情子窗，也不会读取或截取公共文本流。
+- 验证结果：新增静态与行为契约，要求人物查看原样发送 `look`、不建立次级页面待处理状态、不出现 `character-detail`/`prepareStructuredCharacterView` 遗留，并持续禁止从 `ReceiveMessage` 截取文本。若以后要让完整信息安全进入弹窗，服务端需新增含目标 ID 或请求 ID 的结构化人物详情响应。
+
+## 2026-08-13：上线自动向门派首席弟子请安
+- 触发条件：角色完成登录，或断线重连、切换角色后产生新的登录会话。
+- 现象与影响：原扩展不会主动领取门派首席弟子的每日请安经验与潜能，用户需要手动进入门派入口点击“请安”。
+- 参考代码假设：早期需求中的“请安”一度被误解为世界频道问候；当前服务端实际提供独立命令 `sx greet`，且不要求角色位于首席弟子所在场景。
+- 当前实际行为：`sx greet` 允许忙碌、特殊状态或倒地时执行；服务端判断当日是否已请安、角色等级与门派资格、本人是否首席及首席是否在线，并返回对应提示。
+- 根因与修改：在自动化套件 `GI.init` 的 `login` hook 中，仅对新连接或角色变化发送一次 `sx greet`；重复登录消息不再次触发。已完全移除误加的世界频道聊天、开关、文案和存储键。
+- 验证结果：语义片段重新生成后通过扩展完整验证；行为模拟覆盖首次登录、重复登录消息、断线重连、角色切换和 WebSocket 未打开。
+
+## 2026-08-13：结构化详情弹窗扩展与多层交互修复
+- 现象与影响：详情弹窗和完整页面原先各只保存一个待处理请求；同一窗口快速连续点击两个详情或两个功能时，后一次会覆盖前一次，先返回的响应可能套用错误标题/来源层。多个弹窗各自监听 Esc，叠加时可能一次关闭多层或先关闭下层。从详情窗打开他人技能、背包等页面时，部分 `onData` 内部的 `show` 还可能被误判为再次点击同一页而关闭。普通场景物品仍回落主消息区。
+- 协议差异：参考服务端的 `select <id>`、`checkobj`、常规 `checkskill` 会返回带 `type/dialog/id/desc` 的结构化数据；排行榜、`look3` 和 `checkskill ... help` 在参考版本中存在纯文本响应，现网也可能混用结构化与文本格式。纯文本没有请求 ID，无法与同时发生的挖矿、观气或系统消息可靠关联。
+- 根因：旧实现依赖单槽待处理状态，并曾在 `ReceiveMessage` 前截取“下一条文本”作为详情；该做法无法证明文本属于哪次点击。Esc 处理也没有比较实际 z-index，页面数据阶段没有区分用户切换与 `onData` 的内部初始化。
+- 修改：详情请求改为有界队列，按命令、协议类型、对象 ID、来源层和 WebSocket 响应顺序关联；完整页面层请求也改为有界队列，同一来源的旧请求标记为过时并安全消费。公共文本流不再作为任何详情弹窗的数据源，纯文本提示保留在主消息区。所有结构化 `type=item` 场景对象（人物与普通物品）统一进入可拖动自由窗；沿用旧存储键 `characterPopup` 兼容已有配置，仅更新显示文案。Esc 通过实际 z-index 和层深只关闭最顶层，并逐层恢复父层和焦点。服务端页面数据处理期间使用 `Dialog.processingPayload` 防止内部 `show` 误触关闭；未主动打开的页面在消费响应后再补初始化。
+- 验证结果：语义片段重新生成后通过扩展完整验证。可执行模拟覆盖详情快速连续点击、无关响应、排行榜无 ID 顺序、两个队列容量上限与关闭清理，以及确认框 → 详情子窗 → 地图 → 根详情窗的层级回退；静态契约覆盖纯文本不截取、功能关闭回退、父层 `inert`、焦点恢复和响应后补初始化。Python Playwright 不可用，改用系统 Chrome 无头模式加载从当前生成文件抽取的真实 DOM 夹具，确认确认框 → 详情子窗 → 地图 → 根详情窗逐层关闭、父层恢复与焦点返回均通过；该实测也发现并修复了 CSS 隐藏层参与顶层判定的问题。尚未完成现网连服实测；仍需在现网重点实测排行榜纯文本回退、人物“查看”文本提示及人物窗打开他人技能/背包。
+- 2026-08-19：迁移客户端连接层和网络基础设施。新增 `client/modules/connection.js`、`client/modules/network-api.js`，保留 `ConnectServer`、`ShowLoader`、`ShowInputError`、`WSClient`、`API.UserAPI` 入口；新增 WebSocket/登录凭据动态烟测，验证 41 个 JavaScript 文件和 34 个页面脚本。
+- 2026-08-19：迁移自动炼药功能。新增 `features/plugin/medicine-automation.js`，保留 `auto_Development_medicine`、`auto_start_dev_med`、`make_med_cmd` 和 Hook 清理；新增配方命令动态烟测。
+- 2026-08-19：迁移批量物品使用、自动比试和恢复功能。新增 `item-use-automation.js`、`sparring-recovery.js`，保留原有 `WG` 入口，并为文本 Hook、比试 Hook 和恢复定时器补充重复启动及销毁清理。
+## 2026-08-19：智能换装详情请求与结果缓存优化
+
+- 现象：背包装备较多时，去师父或回家前的智能换装需要逐件请求装备详情，首次计算和缓存失效时等待较长。
+- 根因：详情请求按固定延迟批量发出并逐项等待，且最终套装选择没有按角色背包/属性指纹复用。
+- 修改：详情请求限制为 6 路并发，单件 1.8 秒、整批 5 秒截止；详情缓存改为按物品 ID、名称和品阶内容失效；新增按角色保存的最优套装选择指纹缓存，背包和属性未变化时跳过详情读取与组合搜索。
+- 兼容：最优套装计算公式、换装顺序、师父/回家/挂机入口及挂机工具选择规则保持不变；未完整返回详情时不写入最终选择缓存。
+- 验证：语义源码已重新生成；扩展语法、脚本顺序、动态冒烟和语义一致性验证通过。
+## 2026-08-19：详情悬浮窗误触发隔离
+
+- 现象：在师父技能界面点击“学习”等非详情操作时，偶尔自动打开自己的技能详情悬浮窗；快速切换对话框后也可能出现旧详情窗。
+- 根因：技能详情响应只按技能 ID 匹配，没有区分 `skills` 与 `master` 来源；详情请求在同一界面执行其他命令时仍保留，隐藏界面的旧请求也可能继续消费响应。
+- 修改：详情请求记录期望对话框来源；自己的技能只接受 `dialog=skills`，师父技能只接受 `dialog=master`；同一界面执行非详情命令时取消该界面的待处理详情请求；响应到达时清理已隐藏或脱离 DOM 的来源请求。
+- 验证：新增自身/师父同技能 ID 的响应隔离回归断言，完整扩展验证通过。
+- 补充：切换原生对话框或关闭对话框时清空详情等待队列，避免旧界面请求在延迟响应后重新打开悬浮窗。
+- 补充：所有非详情命令（包括使用突破丹）统一清空全局详情等待队列，避免插件或原生按钮不属于标准对话框时仍触发旧技能悬浮窗。
+- 修正：突破丹实际走 `_confirm` 前缀命令，上一版清理位于普通命令分支而未覆盖；现将详情请求清理前置到 `ContainerCommand` 分派入口，仅真正详情命令保留等待。
+
+## 2026-08-21：迁移客户端确认交互模块
+
+- 修改：新增 `client/modules/confirmation.js`，将确认框初始化、数量输入、Escape 关闭、商城/背包/交易/技能等二次操作命令迁入显式上下文模块；`80-confirmation.jsfrag` 保留 `Confirm` 公开入口的兼容桥。
+- 兼容：保留 `_confirm` 分派、`.dialog-confirm` DOM、`Confirm.Show/Close/Process/get_countelement/Show_*` 方法、原有命令文本和加载时序；依赖通过 `getDialog`、`getProcess`、`getUtil`、`sendCommand` 与 `isTopPopupLayer` 显式注入。
+- 验证：重新生成 `client/game-client.js`，通过 JavaScript 语法、页面脚本顺序、动态冒烟和 26 个语义片段一致性验证；尚未完成现网浏览器实测。
+
+## 2026-08-21：迁移客户端 SCRIPT 脚本引擎
+
+- 修改：新增 `client/modules/script-engine.js`，迁移 `SCRIPT` 的命令解析、分号顺序执行、`@var(...)` 参数展开、动作、变量、帮助文案和跨片段状态访问；`70-script-engine.jsfrag` 保留 `const SCRIPT` 兼容桥。
+- 兼容：保留 `SCRIPT` 对象身份、`is_running`、`LAST_OBJ`、`LAST_DATA`、`lAST_MATCHES`、`groups` 外部字段、`vars.me/dc`、`onCancle` 拼写、消息 `join("")`、命令 `split(" ")` 及动作递归的未等待语义。`MAP_DIR_EXITS`、`Util`、`Confirm` 等后置声明通过 getter 注入。
+- 验证：重新生成 `client/game-client.js`，动态覆盖默认命令、变量展开、动作栏/绝招栏、菜单、消息、插件动作、Confirmation 输入 Promise 和跨片段状态；完整扩展验证通过。尚未完成现网浏览器实测。
+
+## 2026-08-21：迁移客户端历史 utilities 工具层
+
+- 修改：新增 `client/modules/utilities.js`，迁移 `Util` 的 JSON、日期、中文数字、Cookie、DOM、同步 AJAX、解析和输入辅助 API；同时迁移 Array/Date 原型兼容扩展。
+- 兼容：`85-utilities.jsfrag` 仅保留显式上下文创建、兼容扩展安装和 `Util` 全局公开别名；保留 `ProxyHost`、同步 AJAX、`new Function` 解析、历史返回值和命令调用方式。Cookie 读取的 `begin/end` 改为局部变量，结果不再泄漏全局。
+- 验证：新增 utilities 模块动态烟测，覆盖历史数据 API、中文数字、Cookie、GET 请求和 Array/Date 扩展；语义源码重新生成并通过完整扩展验证。尚未完成现网浏览器实测。
