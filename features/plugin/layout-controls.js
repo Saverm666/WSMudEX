@@ -580,6 +580,13 @@
               );
             },
           );
+        $(".WG_quick_loadouts")
+          .off("click.WG_quick_loadout")
+          .on("click.WG_quick_loadout", ".WG_quick_loadout", function () {
+            var equipmentGroup = Number($(this).attr("data-equipment-group"));
+            if (equipmentGroup >= 0 && equipmentGroup < 3)
+              WG.Send("eqgroup " + equipmentGroup);
+          });
         $(".WG_equipment_picker")
           .off("click.WG_equipment_picker")
           .on("click.WG_equipment_picker", function (event) {

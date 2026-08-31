@@ -30,6 +30,11 @@
                 <div class="WG_resource_row" data-resource="potential"><div class="WG_resource_line"><span class="WG_resource_label">潜能</span><span class="WG_resource_value">—</span></div></div>
                 <div class="WG_resource_row" data-resource="experience"><div class="WG_resource_line"><span class="WG_resource_label">经验</span><span class="WG_resource_value">—</span></div></div>
               </div>
+              <div class="WG_quick_loadouts" role="group" aria-label="快速切换配装">
+                <button class="WG_quick_loadout" type="button" data-equipment-group="0" title="切换到配装 1" aria-label="切换到配装 1" aria-pressed="false">1</button>
+                <button class="WG_quick_loadout" type="button" data-equipment-group="1" title="切换到配装 2" aria-label="切换到配装 2" aria-pressed="false">2</button>
+                <button class="WG_quick_loadout" type="button" data-equipment-group="2" title="切换到配装 3" aria-label="切换到配装 3" aria-pressed="false">3</button>
+              </div>
               <div class="WG_equipment_list"></div>
             </aside>
             <aside class="WG_side_rail WG_side_rail_right" aria-label="右侧信息栏">

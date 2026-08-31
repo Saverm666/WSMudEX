@@ -72,20 +72,21 @@ html:not(.WG_feature_horizontalMenu_off) .bottom-bar > .right-bar > .tool-item {
     flex: 0 0 2.5em;
     margin: 0;
 }
-html:not(.WG_feature_horizontalMenu_off) .bottom-bar > .right-bar .WG_plugin_tool_icon {
+.bottom-bar > .right-bar > .WG_plugin_tool > .WG_plugin_tool_icon {
     display: block;
-    width: 1.1em;
-    height: 1.1em;
+    width: 1.25em;
+    height: 1.25em;
     margin: 0 auto;
     overflow: visible;
 }
-html:not(.WG_feature_horizontalMenu_off) .bottom-bar > .right-bar > .WG_plugin_tool > .tool-text {
+.bottom-bar > .right-bar > .WG_plugin_tool > .tool-text {
     display: block;
     visibility: visible;
     height: auto;
     color: #111;
     font-size: 0.8em;
-    line-height: 1.25em;
+    font-weight: bold;
+    line-height: 1.5em;
     white-space: nowrap;
     overflow: visible;
 }
@@ -867,12 +868,55 @@ body.WG_resizing_rails * {
 .WG_energy_permanent_value {
     color: var(--border-color, #c0c0c0);
 }
-.WG_equipment_list {
+.WG_quick_loadouts {
     display: grid;
-    gap: 0.25em;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35em;
     margin-top: 1em;
     padding-top: 0.5em;
     border-top: 1px solid #343434;
+}
+.WG_quick_loadout {
+    min-width: 0;
+    height: 2em;
+    padding: 0 0.25em;
+    overflow: hidden;
+    border: 1px solid #454545;
+    border-radius: 4px;
+    color: #bcbcbc;
+    background: #111;
+    font: inherit;
+    font-size: 0.82em;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 120ms ease-out, color 120ms ease-out, background 120ms ease-out;
+}
+.WG_quick_loadout:hover,
+.WG_quick_loadout:focus-visible {
+    border-color: #c7962d;
+    color: #f0c96c;
+    outline: none;
+    background: #17140e;
+}
+.WG_quick_loadout:active {
+    color: #111;
+    background: #c7962d;
+}
+.WG_quick_loadout.is-active,
+.WG_quick_loadout[aria-pressed="true"] {
+    border-color: #d5a43b;
+    color: #111;
+    background: #d5a43b;
+    box-shadow: inset 0 0 0 1px #f0c96c;
+}
+.WG_equipment_list {
+    display: grid;
+    gap: 0.25em;
+    margin-top: 0.5em;
+    padding-top: 0.5em;
+    border-top: 1px solid #20252b;
 }
 .WG_equipment_item {
     position: relative;

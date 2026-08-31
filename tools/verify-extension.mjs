@@ -9082,6 +9082,9 @@ const pluginShellMarkup = pluginModuleUI.wgui();
 assert(
   pluginShellMarkup.includes("WG_side_rail_left") &&
     pluginShellMarkup.includes("WG_side_rail_right") &&
+    pluginShellMarkup.includes('data-equipment-group="0"') &&
+    pluginShellMarkup.includes('data-equipment-group="1"') &&
+    pluginShellMarkup.includes('data-equipment-group="2"') &&
     pluginShellMarkup.includes("WG_equipment_picker") &&
     pluginShellMarkup.includes("WG_auto_first_round"),
   "插件运行包安装后未生成完整的两侧面板 UI",
@@ -9230,6 +9233,15 @@ for (const sideDashboardContract of [
   "pointerdown.WG_message_boundary_resize",
   "keydown.WG_message_boundary_resize",
   'role="separator" aria-label="调整人物列表与信息栏边界"',
+  "WG_quick_loadouts",
+  "WG_quick_loadout",
+  'data-equipment-group="0"',
+  '.off("click.WG_quick_loadout")',
+  'WG.Send("eqgroup " + equipmentGroup)',
+  "updateQuickLoadoutState",
+  "event.eq_group != null",
+  '.attr("aria-pressed", String(selected))',
+  "grid-template-columns: repeat(3, minmax(0, 1fr))",
   "WG_equipment_list",
   "WG_equipment_picker",
   "WG_equipment_picker_choice",
@@ -10575,6 +10587,21 @@ assert(
       "html.WG_feature_horizontalMenu_off .bottom-bar > .right-bar > .tool-item",
     ),
   "关闭横向三点菜单后仍覆盖游戏原生竖排间距",
+);
+assert(
+  automationSource.includes(
+    ".bottom-bar > .right-bar > .WG_plugin_tool > .WG_plugin_tool_icon",
+  ) &&
+    automationSource.includes("width: 1.25em") &&
+    automationSource.includes("height: 1.25em") &&
+    automationSource.includes(
+      ".bottom-bar > .right-bar > .WG_plugin_tool > .tool-text",
+    ) &&
+    automationSource.includes("line-height: 1.5em") &&
+    !automationSource.includes(
+      "html:not(.WG_feature_horizontalMenu_off) .bottom-bar > .right-bar .WG_plugin_tool_icon",
+    ),
+  "插件工具按钮未在横排与竖排模式共用原生尺寸和文字行高",
 );
 assert(
   !automationSource.includes(">挖矿/修炼</button>"),

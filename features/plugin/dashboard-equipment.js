@@ -485,6 +485,7 @@
           return;
         }
         if (event.type != "dialog" || event.dialog != "pack") return;
+        event.eq_group != null && WG.updateQuickLoadoutState(event.eq_group);
         if (event.items) {
           // 完整后台快照使用的是插件对象格式，不能写回原生紧凑数组缓存。
           // 旧缓存若存在则必须失效，确保用户下次打开背包发送完整 pack。
@@ -794,6 +795,15 @@
         }
       },
       dashboardEquipmentSignature: null,
+      updateQuickLoadoutState: function (equipmentGroup) {
+        var normalizedGroup = Number(equipmentGroup);
+        $(".WG_quick_loadout").each(function () {
+          var selected = Number($(this).attr("data-equipment-group")) === normalizedGroup;
+          $(this)
+            .toggleClass("is-active", selected)
+            .attr("aria-pressed", String(selected));
+        });
+      },
       updateDashboardEquipment: function () {
         var equipmentList = $(".WG_equipment_list");
         if (!equipmentList.length) return;
