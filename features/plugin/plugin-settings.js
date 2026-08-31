@@ -20,6 +20,11 @@
               <div class="WG_plugin_settings_heading">功能开关</div>
               <div class="WG_plugin_settings_features"></div>
             </section>
+            <section class="WG_plugin_settings_section">
+              <div class="WG_plugin_settings_heading">配装快捷键</div>
+              <div class="WG_plugin_settings_desc WG_plugin_settings_section_desc">自定义左侧配装 1 / 2 / 3 按钮的显示名称。</div>
+              <div class="WG_plugin_settings_loadouts"></div>
+            </section>
           </div>
           <footer class="WG_plugin_settings_footer">
             <button class="WG_plugin_settings_button WG_plugin_settings_advanced" type="button">更多插件功能</button>
@@ -164,7 +169,9 @@
       },
       renderPluginSettings: function () {
         var autoList = $(".WG_plugin_settings_auto").empty(),
-          featureList = $(".WG_plugin_settings_features").empty();
+          featureList = $(".WG_plugin_settings_features").empty(),
+          loadoutList = $(".WG_plugin_settings_loadouts").empty(),
+          loadoutNames = WG.getQuickLoadoutNames();
         WG.appendPluginSettingsSwitch(autoList, {
           kind: "auto",
           id: "autoAttack",
@@ -206,6 +213,26 @@
         }).appendTo(skillGroup);
         typeof WG.renderAutoPerformSkillSettings === "function" &&
           WG.renderAutoPerformSkillSettings();
+        for (var group = 0; group < 3; group++) {
+          var loadoutRow = $("<label>", {
+              class: "WG_plugin_settings_row WG_plugin_loadout_name_row",
+              for: "WG_plugin_loadout_name_" + group,
+            }).appendTo(loadoutList);
+          $("<span>", {
+            class: "WG_plugin_settings_name",
+            text: "配装 " + (group + 1),
+          }).appendTo(loadoutRow);
+          $("<input>", {
+            class: "WG_plugin_settings_input WG_plugin_loadout_name",
+            id: "WG_plugin_loadout_name_" + group,
+            type: "text",
+            maxlength: 12,
+            value: loadoutNames[group] || "",
+            placeholder: String(group + 1),
+            "data-equipment-group": String(group),
+            "aria-label": "配装 " + (group + 1) + "名称",
+          }).appendTo(loadoutRow);
+        }
         for (var feature of WG.pluginFeatureDefinitions)
           WG.appendPluginSettingsSwitch(featureList, {
             kind: "feature",
@@ -232,6 +259,7 @@
       },
       resetPluginSettings: function () {
         window.localStorage.removeItem(WG.pluginFeatureFlagsKey);
+        WG.resetQuickLoadoutNames();
         WG.applyPluginFeatureFlags();
         WG.renderPluginSettings();
       },
@@ -306,6 +334,16 @@
                 WG.setPluginFeatureEnabled(id, enabled);
               }
               toggle.attr("aria-checked", String(enabled));
+            },
+          )
+          .on(
+            "change.WG_plugin_settings",
+            ".WG_plugin_loadout_name",
+            function () {
+              WG.setQuickLoadoutName(
+                $(this).attr("data-equipment-group"),
+                $(this).val(),
+              );
             },
           );
         $(document)

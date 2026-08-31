@@ -1649,6 +1649,9 @@ body.WG_map_modal_open {
     border-bottom: 1px solid #343434;
     color: #aeb4ba;
 }
+.WG_plugin_settings_section_desc {
+    margin: -0.25em 0 0.45em;
+}
 .WG_plugin_settings_group + .WG_plugin_settings_group {
     margin-top: 0.7em;
 }
@@ -1675,6 +1678,25 @@ body.WG_map_modal_open {
     gap: 0.75em;
     min-height: 2.8em;
     border-bottom: 1px solid #20252b;
+}
+.WG_plugin_loadout_name_row {
+    cursor: text;
+}
+.WG_plugin_settings_input {
+    min-width: 0;
+    width: 8em;
+    height: 2em;
+    padding: 0 0.5em;
+    border: 1px solid #555;
+    border-radius: 0.25em;
+    color: #d0d0d0;
+    background: #111;
+    font: inherit;
+}
+.WG_plugin_settings_input:focus {
+    border-color: #c7962d;
+    outline: 1px solid #c7962d;
+    outline-offset: 1px;
 }
 .WG_plugin_settings_name {
     display: block;

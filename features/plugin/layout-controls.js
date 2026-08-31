@@ -556,6 +556,7 @@
       },
       initSideDashboard: function () {
         WG.loadEquipmentSlotCache();
+        WG.applyQuickLoadoutNames();
         WG.dashboardEquipmentSignature = null;
         WG.initSideChatPanel();
         $(".WG_side_rail_right").off(

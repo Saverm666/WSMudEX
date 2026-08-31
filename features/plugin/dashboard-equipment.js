@@ -23,6 +23,59 @@
         if (value == null || value === "") return "—";
         return $("<div>").html(String(value)).text().trim() || "—";
       },
+      quickLoadoutNamesVersion: 1,
+      getQuickLoadoutNamesKey: function () {
+        return (
+          String(legacy.getRoleId() || (G && G.id) || legacy.getRoleName() || "anonymous") +
+          "_WG_quick_loadout_names_v" +
+          WG.quickLoadoutNamesVersion
+        );
+      },
+      getQuickLoadoutNames: function () {
+        var saved = GM_getValue(WG.getQuickLoadoutNamesKey(), {}),
+          names = {};
+        if (!saved || typeof saved !== "object") return names;
+        for (var group = 0; group < 3; group++)
+          if (typeof saved[group] === "string" && saved[group].trim())
+            names[group] = saved[group].trim();
+        return names;
+      },
+      setQuickLoadoutNames: function (names) {
+        var normalized = {};
+        names = names && typeof names === "object" ? names : {};
+        for (var group = 0; group < 3; group++) {
+          var name = String(names[group] || "").trim();
+          name && (normalized[group] = name.slice(0, 12));
+        }
+        GM_setValue(WG.getQuickLoadoutNamesKey(), normalized);
+        WG.applyQuickLoadoutNames();
+      },
+      setQuickLoadoutName: function (equipmentGroup, name) {
+        var group = Number(equipmentGroup);
+        if (group < 0 || group >= 3 || !Number.isInteger(group)) return;
+        var names = WG.getQuickLoadoutNames();
+        names[group] = String(name || "").trim().slice(0, 12);
+        WG.setQuickLoadoutNames(names);
+      },
+      resetQuickLoadoutNames: function () {
+        WG.setQuickLoadoutNames({});
+      },
+      applyQuickLoadoutNames: function () {
+        var names = WG.getQuickLoadoutNames();
+        $(".WG_quick_loadout").each(function () {
+          var group = Number($(this).attr("data-equipment-group")),
+            fallback = Number.isInteger(group) && group >= 0 && group < 3
+              ? String(group + 1)
+              : "配装",
+            name = names[group] || fallback;
+          $(this)
+            .text(name)
+            .attr({
+              title: "切换到配装 " + (group + 1) + "：" + name,
+              "aria-label": "切换到配装 " + (group + 1) + "：" + name,
+            });
+        });
+      },
       dashboardNumber: function (value) {
         var number = Number(value);
         return Number.isFinite(number)
@@ -863,6 +916,7 @@
       },
       updateSideDashboard: function () {
         if (!$(".WG_side_rail_left").length) return;
+        WG.applyQuickLoadoutNames();
         var score = G.score || {},
           player = G.items && G.id ? G.items.get(G.id) || {} : {},
           hp = player.hp != null ? player.hp : G.hp ?? score.hp,
