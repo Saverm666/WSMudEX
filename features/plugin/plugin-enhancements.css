@@ -306,15 +306,15 @@ html.WG_feature_equipmentPicker_off .WG_equipment_item {
     outline: none;
 }
 .WG_side_chat_input:focus {
-    border-color: #8e6825;
-    box-shadow: inset 0 0 0 1px #8e6825;
+    border-color: #858a8f;
+    box-shadow: inset 0 0 0 1px #858a8f;
 }
 .WG_side_chat_send {
     flex: 0 0 3.4em;
-    border: 1px solid #765923;
+    border: 1px solid #62686e;
     border-radius: 0 3px 3px 0;
-    color: #dfc57f;
-    background: #251b0b;
+    color: #c4c9ce;
+    background: #1c2024;
     font: inherit;
     font-size: 0.78em;
     font-weight: 600;
@@ -322,9 +322,9 @@ html.WG_feature_equipmentPicker_off .WG_equipment_item {
 }
 .WG_side_chat_send:hover,
 .WG_side_chat_send:focus-visible {
-    color: #fff1bf;
+    color: #f0f0f0;
     outline: none;
-    background: #3a290e;
+    background: #2a2f34;
 }
 .WG_side_chat_panel_host {
     display: flex;
@@ -773,9 +773,9 @@ body.WG_resizing_rails * {
 .WG_character_look_notice {
     margin-top: 0.6em;
     padding: 0.5em 0.65em;
-    border-left: 3px solid #c79c37;
-    background: rgba(199, 156, 55, 0.08);
-    color: #d8c38d;
+    border-left: 3px solid #737980;
+    background: rgba(115, 121, 128, 0.12);
+    color: #c0c5ca;
 }
 .WG_item_popup_actions {
     padding-bottom: 0;
@@ -895,21 +895,21 @@ body.WG_resizing_rails * {
 }
 .WG_quick_loadout:hover,
 .WG_quick_loadout:focus-visible {
-    border-color: #c7962d;
-    color: #f0c96c;
+    border-color: #858a8f;
+    color: #e0e0e0;
     outline: none;
-    background: #17140e;
+    background: #1b1e21;
 }
 .WG_quick_loadout:active {
     color: #111;
-    background: #c7962d;
+    background: #969b9f;
 }
 .WG_quick_loadout.is-active,
 .WG_quick_loadout[aria-pressed="true"] {
-    border-color: #d5a43b;
+    border-color: #9da3a8;
     color: #111;
-    background: #d5a43b;
-    box-shadow: inset 0 0 0 1px #f0c96c;
+    background: #969b9f;
+    box-shadow: inset 0 0 0 1px #c7cbd0;
 }
 .WG_equipment_list {
     display: grid;
@@ -938,13 +938,13 @@ body.WG_resizing_rails * {
 }
 .WG_equipment_item:hover,
 .WG_equipment_item:focus-visible {
-    border-left-color: #c7962d;
+    border-left-color: #858a8f;
     outline: none;
-    background-color: #17140e;
+    background-color: #1b1e21;
 }
 .WG_equipment_item:hover::after,
 .WG_equipment_item:focus-visible::after {
-    color: #c7962d;
+    color: #aab0b5;
 }
 .WG_equipment_slot {
     flex: 0 0 3em;
@@ -1077,7 +1077,7 @@ body.WG_resizing_rails * {
 .WG_equipment_picker_choice:hover,
 .WG_equipment_picker_choice:focus-visible {
     border-color: #777;
-    border-left-color: var(--border-color, #c7962d);
+    border-left-color: var(--border-color, #858a8f);
     outline: none;
     background: #191919;
 }
@@ -1107,10 +1107,10 @@ body.WG_resizing_rails * {
 }
 .WG_equipment_picker_quick {
     padding: 0.12em 0.35em;
-    border: 1px solid #80601f;
+    border: 1px solid #62686e;
     border-radius: 999px;
-    color: #e0b553;
-    background: #211a0c;
+    color: #b8bec4;
+    background: #1c2024;
 }
 .WG_equipment_picker_current_badge {
     color: #858c94;
@@ -1361,9 +1361,9 @@ body.WG_map_modal_open {
 .WG_skill_calc_intro {
     margin-bottom: 1rem;
     padding: 0.7rem 0.85rem;
-    border-left: 3px solid #9a7838;
+    border-left: 3px solid #737980;
     color: #aeb4ba;
-    background: #15130f;
+    background: #15181b;
 }
 .WG_skill_calc_form {
     display: grid;
@@ -1396,8 +1396,8 @@ body.WG_map_modal_open {
 }
 .WG_skill_calc_form input:focus,
 .WG_skill_calc_form select:focus {
-    border-color: #b38a38;
-    box-shadow: 0 0 0 1px #6f5421;
+    border-color: #858a8f;
+    box-shadow: 0 0 0 1px #62686e;
 }
 .WG_skill_calc_input_suffix {
     display: flex;
@@ -1448,7 +1448,7 @@ body.WG_map_modal_open {
     min-width: 0;
     padding: 0.85rem;
     border: 1px solid #363636;
-    border-left: 3px solid #8e6825;
+    border-left: 3px solid #62686e;
     background: #111;
 }
 .WG_skill_calc_result small,
@@ -1461,7 +1461,7 @@ body.WG_map_modal_open {
 }
 .WG_skill_calc_result strong {
     overflow: hidden;
-    color: #e2bd64;
+    color: #d0d4d8;
     font-size: 1.2rem;
     font-weight: 500;
     text-overflow: ellipsis;
@@ -1480,8 +1480,8 @@ body.WG_map_modal_open {
     width: 9px;
     height: 9px;
     pointer-events: none;
-    border-right: 2px solid #8e6825;
-    border-bottom: 2px solid #8e6825;
+    border-right: 2px solid #737980;
+    border-bottom: 2px solid #737980;
 }
 .WG_dialog_snapshot {
     position: fixed;
@@ -1519,7 +1519,7 @@ body.WG_map_modal_open {
     max-height: min(10rem, calc(100vh - 1.25rem));
     overflow: hidden;
     border: 1px solid #666;
-    border-left: 4px solid #d2a037;
+    border-left: 4px solid #737980;
     border-radius: 0.3rem;
     background: #111 !important;
     box-shadow: 0 0.8rem 2.2rem rgba(0, 0, 0, 0.78);
@@ -1694,8 +1694,8 @@ body.WG_map_modal_open {
     font: inherit;
 }
 .WG_plugin_settings_input:focus {
-    border-color: #c7962d;
-    outline: 1px solid #c7962d;
+    border-color: #858a8f;
+    outline: 1px solid #858a8f;
     outline-offset: 1px;
 }
 .WG_plugin_settings_name {
@@ -1730,11 +1730,11 @@ body.WG_map_modal_open {
     transition: transform 140ms ease-out, background 140ms ease-out;
 }
 .WG_plugin_switch[aria-checked="true"] {
-    border-color: #9a6b20;
-    background: #3a2708;
+    border-color: #858a8f;
+    background: #2c3034;
 }
 .WG_plugin_switch[aria-checked="true"]::after {
-    background: #d5a23c;
+    background: #c7cbd0;
     transform: translateX(1.35em);
 }
 .WG_plugin_settings_footer {
@@ -1752,6 +1752,13 @@ body.WG_map_modal_open {
     background: #0c0c0c;
     font: inherit;
     cursor: pointer;
+}
+.WG_plugin_settings_button:hover,
+.WG_plugin_settings_button:focus-visible {
+    border-color: #858a8f;
+    color: #e0e0e0;
+    background: #1b1e21;
+    outline: none;
 }
 .WG_plugin_settings_advanced {
     margin-right: auto;
@@ -1864,7 +1871,7 @@ body.WG_map_modal_open {
     min-height: 2.5em;
     padding: 0.35em 0.45em;
     border: 1px solid #363636;
-    border-left: 3px solid #8e6825;
+    border-left: 3px solid #62686e;
     border-radius: 0.25em;
     background: #111;
     cursor: grab;
@@ -1873,14 +1880,14 @@ body.WG_map_modal_open {
     transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, opacity 120ms ease, transform 120ms ease;
 }
 .WG_auto_first_round_row:hover {
-    border-color: #675635;
-    background: #15130f;
+    border-color: #858a8f;
+    background: #1b1e21;
 }
 .WG_auto_first_round_row.is-dragging {
     z-index: 1;
-    border-color: #c09239;
+    border-color: #9da3a8;
     opacity: 0.82;
-    background: #211b10;
+    background: #24282c;
     box-shadow: 0 0.5em 1.2em rgba(0, 0, 0, 0.58);
     cursor: grabbing;
     transform: scale(1.012);
@@ -1899,13 +1906,13 @@ body.WG_map_modal_open {
 }
 .WG_auto_first_round_drag_handle:focus-visible {
     border-radius: 0.15em;
-    color: #e2bd64;
-    outline: 1px solid #9a7838;
+    color: #e0e0e0;
+    outline: 1px solid #858a8f;
     outline-offset: 2px;
 }
 .WG_auto_first_round_index {
     flex: 0 0 1.6em;
-    color: #d5a43b;
+    color: #aeb4ba;
     font-variant-numeric: tabular-nums;
     text-align: center;
 }
@@ -1948,10 +1955,10 @@ body.WG_map_modal_open {
 .WG_auto_first_round_button:focus-visible,
 .WG_auto_first_round_add:hover,
 .WG_auto_first_round_add:focus-visible {
-    border-color: #9a7838;
+    border-color: #858a8f;
     color: #eee;
     outline: none;
-    background: #1a160e;
+    background: #1b1e21;
 }
 .WG_auto_first_round_empty {
     padding: 1.4em 0.6em;
@@ -1969,8 +1976,8 @@ body.WG_map_modal_open {
     min-width: 5em;
 }
 .WG_auto_first_round_save {
-    border-color: #8e6825;
-    color: #e2bd64;
+    border-color: #858a8f;
+    color: #d0d4d8;
 }
 @media (max-width: 680px) {
     .WG_auto_first_round_columns {

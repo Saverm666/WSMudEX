@@ -9536,6 +9536,40 @@ for (const pluginSettingsContract of [
     `插件设置入口缺少自动攻击管理或功能开关: ${pluginSettingsContract}`,
   );
 }
+const quickLoadoutPalette = pluginEnhancementStyles.match(
+  /\.WG_quick_loadout:hover,[\s\S]*?\.WG_quick_loadout\[aria-pressed="true"\][\s\S]*?\n\}/,
+)?.[0];
+assert(
+  quickLoadoutPalette &&
+    quickLoadoutPalette.includes("#858a8f") &&
+    quickLoadoutPalette.includes("#969b9f") &&
+    quickLoadoutPalette.includes("#1b1e21") &&
+    !quickLoadoutPalette.includes("#c7962d") &&
+    !quickLoadoutPalette.includes("#f0c96c") &&
+    !quickLoadoutPalette.includes("#d5a43b"),
+  "快捷配装按钮必须使用与游戏统一的中性灰配色",
+);
+const pluginSettingsInputFocus = pluginEnhancementStyles.match(
+  /\.WG_plugin_settings_input:focus \{[\s\S]*?\n\}/,
+)?.[0];
+assert(
+  pluginSettingsInputFocus &&
+    pluginSettingsInputFocus.includes("#858a8f") &&
+    !pluginSettingsInputFocus.includes("#c7962d"),
+  "插件设置输入框焦点样式不得使用黄色强调色",
+);
+const pluginSwitchChecked = pluginEnhancementStyles.match(
+  /\.WG_plugin_switch\[aria-checked="true"\][\s\S]*?\.WG_plugin_switch\[aria-checked="true"\]::after \{[\s\S]*?\n\}/,
+)?.[0];
+assert(
+  pluginSwitchChecked &&
+    pluginSwitchChecked.includes("#858a8f") &&
+    pluginSwitchChecked.includes("#2c3034") &&
+    pluginSwitchChecked.includes("#c7cbd0") &&
+    !pluginSwitchChecked.includes("#9a6b20") &&
+    !pluginSwitchChecked.includes("#d5a23c"),
+  "插件设置开关必须使用与游戏统一的中性灰配色",
+);
 for (const runtimeFeatureContract of [
   "IsWGPluginFeatureEnabled",
   'IsWGPluginFeatureEnabled("characterPopup")',
