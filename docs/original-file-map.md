@@ -8,7 +8,7 @@
 | `popup.html` | `popup/index.html` | 扩展控制弹窗 |
 | `popup.js` | `popup/controller.js` | 启停和配置导入导出 |
 | `icon128.png` | `assets/icon-128.png` | 扩展图标 |
-| `qrcode.png` | `assets/support-qr.png` | 支持二维码 |
+| `qrcode.png` | —（已移除） | 原扩展打赏二维码，不再交付 |
 | `ws-js/OQnmUCFh.js` | `runtime/userscript-compat.js` | GM API 兼容层 |
 | `ws-js/PtFcg2HA.js` | `vendor/jquery-3.7.1.js` | jQuery 3.7.1 |
 | `ws-js/Cfe70iMO.js` | `vendor/vue-2.6.11.js` | Vue 2.6.11 |

@@ -102,6 +102,11 @@
       pluginFeatureFlagsKey: "WG_plugin_feature_flags_v1",
       pluginFeatureDefinitions: [
         {
+          id: "autoGreetOnOpen",
+          name: "每次打开自动尝试请安",
+          desc: "每次打开游戏或切换角色时，自动发送一次门派首席请安。",
+        },
+        {
           id: "horizontalMenu",
           name: "横向三点菜单",
           desc: "让原生三点菜单从底部向左横排展开。",

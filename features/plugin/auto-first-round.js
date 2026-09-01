@@ -3,7 +3,7 @@
   "use strict";
 
   global.WSMudPlugin.registerFeature("auto-first-round", function install(context) {
-    const { WG, G, UI, legacy } = context;
+    const { WG, G, UI, legacy, messageAppend } = context;
 
     Object.assign(WG, {
       autoFirstRoundVersion: 1,
@@ -281,12 +281,14 @@
         WG.autoFirstRoundQueue = [];
         WG.autoFirstRoundIndex = 0;
         WG.autoFirstRoundReadyAt = 0;
+        WG.autoFirstRoundPending = null;
       },
       cancelAutoFirstRound: function () {
         WG.autoFirstRoundActive = false;
         WG.autoFirstRoundQueue = [];
         WG.autoFirstRoundIndex = 0;
         WG.autoFirstRoundReadyAt = 0;
+        WG.autoFirstRoundPending = null;
       },
       getAutoFirstRoundReleaseDelay: function () {
         var releaseTime = G.score2 && G.score2.releasetime,
@@ -302,7 +304,26 @@
         WG.autoFirstRoundQueue = WG.loadAutoFirstRoundConfig().slice();
         WG.autoFirstRoundIndex = 0;
         WG.autoFirstRoundReadyAt = 0;
+        WG.autoFirstRoundPending = null;
         WG.autoFirstRoundActive = WG.autoFirstRoundQueue.length > 0;
+      },
+      acknowledgeAutoFirstRoundPerform: function (data) {
+        var pending = WG.autoFirstRoundPending;
+        if (
+          !WG.autoFirstRoundActive ||
+          !pending ||
+          !data ||
+          String(data.id || "") !== pending.id
+        )
+          return false;
+        WG.autoFirstRoundIndex += 1;
+        WG.autoFirstRoundPending = null;
+        WG.autoFirstRoundReadyAt =
+          Date.now() + Math.max(0, Number(data.rtime) || 0);
+        return true;
+      },
+      getAutoFirstRoundConfirmTimeout: function () {
+        return Math.max(1200, WG.getAutoFirstRoundReleaseDelay() + 500);
       },
       processAutoFirstRound: function () {
         if (!G.auto_preform) {
@@ -312,16 +333,45 @@
         if (!WG.autoFirstRoundActive) return false;
         if (Date.now() < (WG.autoFirstRoundReadyAt || 0)) return true;
         if (G.gcd || !WG.is_free()) return true;
+        var pending = WG.autoFirstRoundPending,
+          now = Date.now();
+        if (pending) {
+          if (
+            now - pending.sentAt < WG.getAutoFirstRoundConfirmTimeout()
+          )
+            return true;
+          if (pending.attempts >= 3) {
+            typeof messageAppend === "function" &&
+              messageAppend(
+                "<hir>首轮出招未收到成功确认，已跳过：" +
+                  pending.id +
+                  "</hir>",
+              );
+            WG.autoFirstRoundIndex += 1;
+            WG.autoFirstRoundPending = null;
+          } else {
+            pending.attempts += 1;
+            pending.sentAt = now;
+            WG.Send("perform " + pending.id);
+            return true;
+          }
+        }
         var skills = WG.getAutoFirstRoundSkills(),
           available = {};
         for (var skill of skills) available[skill.id] = true;
         while (WG.autoFirstRoundIndex < WG.autoFirstRoundQueue.length) {
-          var skillId =
-            WG.autoFirstRoundQueue[WG.autoFirstRoundIndex++];
-          if (!available[skillId] || G.cds.get(skillId)) continue;
+          var skillId = WG.autoFirstRoundQueue[WG.autoFirstRoundIndex];
+          if (!available[skillId]) {
+            WG.autoFirstRoundIndex += 1;
+            continue;
+          }
+          if (G.cds.get(skillId)) return true;
+          WG.autoFirstRoundPending = {
+            id: skillId,
+            sentAt: now,
+            attempts: 1,
+          };
           WG.Send("perform " + skillId);
-          WG.autoFirstRoundReadyAt =
-            Date.now() + WG.getAutoFirstRoundReleaseDelay();
           return true;
         }
         WG.autoFirstRoundActive = false;
@@ -329,5 +379,25 @@
         return false;
       },
     });
+
+    var protocolHook =
+      typeof WG.add_hook === "function"
+        ? WG.add_hook(["combat", "dispfm"], function (data) {
+            if (data.type === "combat") {
+              if (data.start) WG.resetAutoFirstRoundCombat();
+              else if (data.end) WG.cancelAutoFirstRound();
+              return;
+            }
+            WG.acknowledgeAutoFirstRoundPerform(data);
+          })
+        : null;
+
+    return {
+      destroy: function () {
+        protocolHook != null &&
+          typeof WG.remove_hook === "function" &&
+          WG.remove_hook(protocolHook);
+      },
+    };
   });
 })(window);

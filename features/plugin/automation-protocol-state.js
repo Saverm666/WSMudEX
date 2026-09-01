@@ -80,6 +80,8 @@
                     WG.scheduleDashboardStateRefresh({ pack: true, delay: 200 });
                   var socket = getWs();
                   shouldGreetChief &&
+                    (!WG.isPluginFeatureEnabled ||
+                      WG.isPluginFeatureEnabled("autoGreetOnOpen")) &&
                     socket &&
                     1 == socket.readyState &&
                     socket.send("sx greet");

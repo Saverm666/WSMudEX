@@ -1522,6 +1522,7 @@ const automationProtocolContractSource = readFileSync(
 );
 for (const chiefGreetingContract of [
   'var shouldGreetChief = !G.connected || G.id != o.id',
+  'WG.isPluginFeatureEnabled("autoGreetOnOpen")',
   'socket.send("sx greet")',
 ]) {
   assert(
@@ -5230,6 +5231,14 @@ assert(
     protocolDashboardRefreshes[0].pack === true &&
     protocolDashboardRefreshes[0].delay === 200,
   "自动化协议状态登录顺序或首次请安行为发生变化",
+);
+protocolStateWG.isPluginFeatureEnabled = () => false;
+protocolStateG.connected = false;
+protocolStateHandler({ type: "login", id: "new-role", level: 3 });
+assert(
+  protocolStateSocketCommands.join("|") === "sx greet" &&
+    protocolDashboardRefreshes.length === 2,
+  "关闭每次打开自动请安后仍发送命令，或影响了登录刷新",
 );
 protocolStateHandler({ type: "exits", items: { north: "北门", out: "出口" } });
 assert(
@@ -9406,6 +9415,8 @@ for (const sideDashboardContract of [
   'WG.Send("combat")',
   "prepareAutoFirstRound",
   "processAutoFirstRound",
+  "acknowledgeAutoFirstRoundPerform",
+  "getAutoFirstRoundConfirmTimeout",
   'WG.Send("perform " + skillId)',
   '"_WG_auto_first_round_v1"',
   "首轮结束后，恢复冷却完成即出招",
@@ -9559,6 +9570,8 @@ for (const pluginSettingsContract of [
   "initPluginSettings",
   'command="pluginsettings"',
   ">更多插件功能</button>",
+  "autoGreetOnOpen",
+  "每次打开自动尝试请安",
   "horizontalMenu",
   "chatDrawer",
   "equipmentPicker",
@@ -9606,6 +9619,12 @@ for (const pluginSettingsContract of [
     `插件设置入口缺少自动攻击管理或功能开关: ${pluginSettingsContract}`,
   );
 }
+assert(
+  upstreamAutomationSource.includes(
+    'WG.isPluginFeatureEnabled("autoGreetOnOpen")',
+  ) && upstreamAutomationSource.includes('ws.send("sx greet")'),
+  "实际加载的自动化核心未按设置开关执行上线请安",
+);
 assert(
   !pluginSettingsModuleSource.includes('id: "smartEquipmentOnTravel"') &&
     !automationSource.includes("runAfterOptionalTravelEquipment") &&
@@ -10562,6 +10581,16 @@ firstRoundSandbox.WG.processAutoFirstRound = readDashboardMethod(
   null,
   firstRoundSandbox,
 );
+firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform = readDashboardMethod(
+  "acknowledgeAutoFirstRoundPerform",
+  "getAutoFirstRoundConfirmTimeout",
+  firstRoundSandbox,
+);
+firstRoundSandbox.WG.getAutoFirstRoundConfirmTimeout = readDashboardMethod(
+  "getAutoFirstRoundConfirmTimeout",
+  "processAutoFirstRound",
+  firstRoundSandbox,
+);
 firstRoundSandbox.WG.getAutoFirstRoundReleaseDelay = readDashboardMethod(
   "getAutoFirstRoundReleaseDelay",
   "prepareAutoFirstRound",
@@ -10622,18 +10651,60 @@ assert(firstRoundSandbox.WG.processAutoFirstRound(), "首轮第一招未被消�
 assert(
   firstRoundSandbox.WG.processAutoFirstRound() &&
     firstRoundCommands.length === 1 &&
+    firstRoundSandbox.WG.autoFirstRoundIndex === 0 &&
+    firstRoundSandbox.WG.autoFirstRoundPending?.id === "force.power",
+  "首轮未等待服务器确认就连续发送下一招",
+);
+assert(
+  firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+    id: "force.power",
+    rtime: 1200,
+  }) &&
     firstRoundSandbox.WG.autoFirstRoundIndex === 1 &&
     firstRoundSandbox.WG.autoFirstRoundReadyAt > Date.now(),
-  "首轮未等待上一招释放时间就连续发送下一招",
+  "首轮未按技能成功协议推进或采用服务端释放时间",
 );
 firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
 assert(firstRoundSandbox.WG.processAutoFirstRound(), "释放结束后未执行首轮第二招");
-firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
+assert(
+  !firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+    id: "dodge.other",
+    rtime: 0,
+  }) && firstRoundSandbox.WG.autoFirstRoundIndex === 1,
+  "无关技能的成功协议误推进了首轮队列",
+);
+assert(
+  firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+    id: "sword.wu",
+    rtime: 0,
+  }),
+  "首轮第二招未收到成功确认",
+);
 assert(
   !firstRoundSandbox.WG.processAutoFirstRound() &&
     JSON.stringify(firstRoundCommands) ===
       JSON.stringify(["perform force.power", "perform sword.wu"]),
   "首轮未按配置顺序出招或结束后未让回普通调度",
+);
+firstRoundCommands.length = 0;
+firstRoundSandbox.WG.autoFirstRoundActive = true;
+firstRoundSandbox.WG.autoFirstRoundQueue = ["force.retry", "sword.after"];
+firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+firstRoundSandbox.WG.autoFirstRoundPending = {
+  id: "force.retry",
+  sentAt: Date.now() - 5000,
+  attempts: 1,
+};
+firstRoundSandbox.WG.getAutoFirstRoundSkills = () => [
+  { id: "force.retry" },
+  { id: "sword.after" },
+];
+assert(
+  firstRoundSandbox.WG.processAutoFirstRound() &&
+    firstRoundCommands.join("|") === "perform force.retry" &&
+    firstRoundSandbox.WG.autoFirstRoundIndex === 0 &&
+    firstRoundSandbox.WG.autoFirstRoundPending.attempts === 2,
+  "首轮技能未确认时没有只重试当前招，或错误推进了后续招式",
 );
 firstRoundCommands.length = 0;
 firstRoundSandbox.G.auto_preform = true;
@@ -10647,6 +10718,7 @@ firstRoundSandbox.WG.autoFirstRoundQueue = [
 ];
 firstRoundSandbox.WG.autoFirstRoundIndex = 0;
 firstRoundSandbox.WG.autoFirstRoundReadyAt = 0;
+firstRoundSandbox.WG.autoFirstRoundPending = null;
 firstRoundSandbox.WG.getAutoFirstRoundSkills = () => [
   { id: "sword.wu" },
   { id: "sword.poqi" },
@@ -10655,22 +10727,167 @@ firstRoundSandbox.WG.getAutoFirstRoundSkills = () => [
 ];
 for (let index = 0; index < 4; index += 1) {
   assert(firstRoundSandbox.WG.processAutoFirstRound(), "指定四招队列提前结束");
-  firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
+  assert(
+    firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+      id: firstRoundSandbox.WG.autoFirstRoundQueue[index],
+      rtime: 0,
+    }),
+    "指定四招队列未按当前技能确认推进",
+  );
 }
 assert(
   firstRoundCommands.join("|") ===
     "perform sword.wu|perform sword.poqi|perform dodge.tage|perform parry.wushen",
   "无招、破气、踏歌、五神未保持用户配置顺序",
 );
+for (const configuredOrder of [
+  [
+    "dodge.tage",
+    "force.poqi",
+    "unarmed.wuzhao",
+    "force.ziqi",
+    "unarmed.wuying",
+    "parry.wushen",
+  ],
+  [
+    "sword.wuwo",
+    "dodge.lingbo",
+    "force.ningshen",
+    "force.yangguan",
+    "unarmed.baihong",
+    "sword.wuxiang",
+    "force.shengsi",
+  ],
+]) {
+  firstRoundCommands.length = 0;
+  firstRoundSandbox.WG.autoFirstRoundActive = true;
+  firstRoundSandbox.WG.autoFirstRoundQueue = configuredOrder.slice();
+  firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+  firstRoundSandbox.WG.autoFirstRoundPending = null;
+  firstRoundSandbox.WG.autoFirstRoundReadyAt = 0;
+  firstRoundSandbox.WG.getAutoFirstRoundSkills = () =>
+    configuredOrder.map((id) => ({ id }));
+  for (const id of configuredOrder) {
+    assert(firstRoundSandbox.WG.processAutoFirstRound(), "多技能组合队列提前结束");
+    assert(
+      firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({ id, rtime: 0 }),
+      "多技能组合没有按服务器确认推进",
+    );
+  }
+  assert(!firstRoundSandbox.WG.processAutoFirstRound(), "多技能组合队列没有结束");
+  assert(
+    firstRoundCommands.join("|") ===
+      configuredOrder.map((id) => "perform " + id).join("|"),
+    "截图中的多技能组合未严格保持用户配置顺序",
+  );
+}
+const randomFirstRoundSeed = Number(
+  process.env.WSMUD_RANDOM_SKILL_SEED || 0x5a17c0de,
+) >>> 0;
+let randomFirstRoundState = randomFirstRoundSeed;
+const nextFirstRoundRandom = () => {
+  randomFirstRoundState =
+    (Math.imul(randomFirstRoundState, 1664525) + 1013904223) >>> 0;
+  return randomFirstRoundState / 0x100000000;
+};
+const shuffleFirstRoundSkills = (values) => {
+  const shuffled = values.slice();
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(nextFirstRoundRandom() * (index + 1));
+    [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
+  }
+  return shuffled;
+};
+const randomFirstRoundSkillPool = [
+  "sword.wuwo",
+  "sword.wuxiang",
+  "sword.poqi",
+  "blade.kuangfeng",
+  "blade.xueyin",
+  "unarmed.wuzhao",
+  "unarmed.wuying",
+  "unarmed.baihong",
+  "unarmed.qianye",
+  "force.ningshen",
+  "force.yangguan",
+  "force.shengsi",
+  "force.ziqi",
+  "force.wushen",
+  "dodge.tage",
+  "dodge.lingbo",
+  "dodge.zhui",
+  "parry.wushen",
+];
+for (let trial = 0; trial < 200; trial += 1) {
+  const availableOrder = shuffleFirstRoundSkills(randomFirstRoundSkillPool);
+  const configuredLength =
+    1 + Math.floor(nextFirstRoundRandom() * availableOrder.length);
+  const configuredOrder = shuffleFirstRoundSkills(
+    availableOrder.slice(0, configuredLength),
+  );
+  firstRoundCommands.length = 0;
+  firstRoundSandbox.G.auto_preform = true;
+  firstRoundSandbox.G.gcd = false;
+  firstRoundSandbox.WG.autoFirstRoundActive = true;
+  firstRoundSandbox.WG.autoFirstRoundQueue = configuredOrder.slice();
+  firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+  firstRoundSandbox.WG.autoFirstRoundPending = null;
+  firstRoundSandbox.WG.autoFirstRoundReadyAt = 0;
+  firstRoundSandbox.WG.getAutoFirstRoundSkills = () =>
+    availableOrder.map((id) => ({ id }));
+  for (const id of configuredOrder) {
+    assert(
+      firstRoundSandbox.WG.processAutoFirstRound(),
+      `随机首轮队列提前结束；seed=${randomFirstRoundSeed} trial=${trial}`,
+    );
+    const sendsBeforeNoise = firstRoundCommands.length;
+    const noiseId = availableOrder.find((skillId) => skillId !== id);
+    if (noiseId)
+      assert(
+        !firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+          id: noiseId,
+          rtime: Math.floor(nextFirstRoundRandom() * 1800),
+        }) && firstRoundCommands.length === sendsBeforeNoise,
+        `随机无关回执推进了队列；seed=${randomFirstRoundSeed} trial=${trial}`,
+      );
+    const repeatPolls = Math.floor(nextFirstRoundRandom() * 4);
+    for (let poll = 0; poll < repeatPolls; poll += 1)
+      firstRoundSandbox.WG.processAutoFirstRound();
+    assert(
+      firstRoundCommands.length === sendsBeforeNoise,
+      `随机确认前重复发送或越序；seed=${randomFirstRoundSeed} trial=${trial}`,
+    );
+    assert(
+      firstRoundSandbox.WG.acknowledgeAutoFirstRoundPerform({
+        id,
+        rtime: Math.floor(nextFirstRoundRandom() * 1800),
+      }),
+      `随机技能未按成功回执推进；seed=${randomFirstRoundSeed} trial=${trial}`,
+    );
+    firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
+  }
+  assert(
+    !firstRoundSandbox.WG.processAutoFirstRound() &&
+      firstRoundCommands.join("|") ===
+        configuredOrder.map((id) => "perform " + id).join("|"),
+    `随机技能顺序不一致；seed=${randomFirstRoundSeed} trial=${trial}`,
+  );
+}
 firstRoundSandbox.WG.autoFirstRoundActive = true;
 firstRoundSandbox.WG.autoFirstRoundQueue = ["force.power"];
 firstRoundSandbox.WG.autoFirstRoundIndex = 0;
+firstRoundSandbox.WG.autoFirstRoundPending = {
+  id: "force.power",
+  sentAt: Date.now(),
+  attempts: 1,
+};
 firstRoundSandbox.G.auto_preform = false;
 assert(
   !firstRoundSandbox.WG.processAutoFirstRound() &&
     !firstRoundSandbox.WG.autoFirstRoundActive &&
     firstRoundSandbox.WG.autoFirstRoundQueue.length === 0 &&
-    firstRoundSandbox.WG.autoFirstRoundIndex === 0,
+    firstRoundSandbox.WG.autoFirstRoundIndex === 0 &&
+    firstRoundSandbox.WG.autoFirstRoundPending === null,
   "关闭自动攻击后未同步取消叫杀第一轮出招",
 );
 for (const firstRoundDragStyleContract of [

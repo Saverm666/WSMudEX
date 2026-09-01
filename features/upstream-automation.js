@@ -7975,9 +7975,15 @@
             WG.add_hook(["status", "login", "exits", "room", "items", "itemadd", "itemremove", "sc", "text", "state", "msg", "perform", "clearDistime", "dispfm", "combat", "die"], function (data) {
                 switch (data.type) {
                     case "login":
+                        var shouldGreetChief = !G.connected || G.id != data.id;
                         G.id = data.id;
                         G.connected = true;
                         WG.online = true;
+                        if (shouldGreetChief &&
+                            (!WG.isPluginFeatureEnabled || WG.isPluginFeatureEnabled("autoGreetOnOpen")) &&
+                            ws && ws.readyState == 1) {
+                            ws.send("sx greet");
+                        }
                         break;
                     case "exits":
                         G.exits = new Map();

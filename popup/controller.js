@@ -19,10 +19,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  document.getElementById("qrCode").src = chrome.runtime.getURL(
-    "assets/support-qr.png",
-  );
-
   chrome.storage.local.get(["extensionEnabled"], (storedSettings) => {
     const enabled = storedSettings.extensionEnabled !== false;
     extensionToggle.checked = enabled;
