@@ -42,42 +42,14 @@ WSMudEX 是适用于“武神传说（WSMUD）”网页游戏的 Chrome Manifest
 
 扩展仅声明 `scripting`、`storage` 以及受支持游戏域名的访问权限。部分历史功能仍保留外部网络请求、推送服务和第三方资源入口；只有在使用对应功能时才应填写自己的 Token 或 Key。请勿在 Issue、截图或提交记录中公开这些凭据。
 
-详细行为见 [`docs/behavior-equivalence.md`](docs/behavior-equivalence.md)。使用本项目表示你愿意自行承担账号安全、游戏规则兼容性及第三方服务可用性风险。
+使用本项目表示你愿意自行承担账号安全、游戏规则兼容性及第三方服务可用性风险。
 
-## 开发与验证
+## 仓库内容
 
-修改前请先阅读 [`docs/code-index.md`](docs/code-index.md)。插件模块优先维护在 `features/plugin/`，不要直接编辑生成文件。
+本仓库仅发布可直接加载的扩展运行文件、安装说明和许可证。开发源码片段、测试、构建与验证工具、开发文档和未加载的旧模块不包含在下载内容中；安装无需 Node.js、Python 或构建步骤。
 
-修改普通扩展代码后运行：
-
-```bash
-node tools/verify-extension.mjs
-```
-
-涉及 `sources/automation-suite/*.jsfrag` 或 `sources/game-client/*.jsfrag` 时，先重新生成聚合文件，再验证：
-
-```bash
-node tools/sync-semantic-sources.mjs build
-node tools/verify-extension.mjs
-```
-
-主要目录：
-
-- `extension/`：Manifest V3 内容脚本和后台 Service Worker
-- `popup/`：扩展弹窗及配置导入导出
-- `runtime/`：Userscript API 兼容和页面配置同步
-- `features/plugin/`：独立插件功能模块
-- `features/`：自动化、Raid 和 Trigger 运行入口
-- `client/modules/`：已迁移的游戏客户端模块
-- `sources/`：尚未迁移代码的语义真源
-- `docs/`：架构索引、行为说明和变更记录
-- `tools/`：源码同步与静态验证工具
-
-## 参与贡献
-
-欢迎提交 Issue 和 Pull Request。提交前请确保修改集中于问题本身，并运行完整验证。涉及现网协议、DOM、命令或加载时机的修复，请在说明中记录现象、差异、根因和验证结果。
+遇到问题可提交 Issue，注明游戏域名、触发步骤和实际提示。
 
 ## 许可证与上游代码
 
 本项目原创代码和修改部分使用 [MIT License](LICENSE)。仓库中包含的第三方库、上游自动化代码及由原扩展整理的代码仍归各自权利人所有，并遵循各自许可证或使用条款；MIT License 不会覆盖这些独立作品。上游自动化许可见 [`features/upstream-automation.LICENSE`](features/upstream-automation.LICENSE)。
-
