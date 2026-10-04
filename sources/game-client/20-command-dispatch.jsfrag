@@ -190,6 +190,7 @@ function SendCommand(_0x557412) {
     typeof window.WG.observeDashboardCommand == "function" &&
     window.WG.observeDashboardCommand(_0x557412);
   Dialog.extend.record(_0x557412);
+  Setting.observeAutoWorkCommand(_0x557412);
   GameClient.Send(_0x557412);
 }
 function ChannelChanged() {

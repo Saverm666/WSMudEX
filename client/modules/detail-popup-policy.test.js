@@ -86,6 +86,47 @@ test('skill structured matching requires id and description, ignoring level-up p
   );
 });
 
+test('master skill details match live checkskill packets that still use dialog=skills', () => {
+  const pending = {
+    kind: 'skill',
+    id: 'force',
+    expectedDialog: 'master',
+    from: 'master_1',
+  };
+  assert.equal(
+    policy.matchesDetailPopupData(pending, {
+      dialog: 'skills',
+      id: 'force',
+      desc: '师父内功详解',
+    }),
+    true,
+  );
+  assert.equal(
+    policy.matchesDetailPopupData(pending, {
+      dialog: 'master',
+      id: 'force',
+      desc: '师父内功详解',
+    }),
+    true,
+  );
+  assert.equal(
+    policy.matchesDetailPopupData(pending, {
+      dialog: 'skills',
+      id: 'unarmed',
+      desc: '别的技能',
+    }),
+    false,
+  );
+  assert.equal(policy.resolveSkillDetailOwnerKind(pending, { dialog: 'skills' }), 'master');
+  assert.equal(
+    policy.resolveSkillDetailOwnerKind(
+      { kind: 'skill', expectedDialog: 'skills' },
+      { dialog: 'skills' },
+    ),
+    'skills',
+  );
+});
+
 test('skill help pending does not consume a different skill detail dialog', () => {
   const pending = policy.describePopupDetailCommand('checkskill unarmed help');
   assert.equal(

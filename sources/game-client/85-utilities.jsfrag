@@ -3,7 +3,7 @@ const ClientUtilities = unsafeWindow.WSMudClient.createModule("utilities", {
   hostWindow: window,
   documentRef: document,
   navigator,
-  timers: { setTimeout },
+  timers: { setTimeout: setTimeout.bind(window) },
   json: JSON,
   DateConstructor: Date,
   PromiseConstructor: Promise,

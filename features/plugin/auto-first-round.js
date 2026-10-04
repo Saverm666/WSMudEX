@@ -276,6 +276,7 @@
         event.preventDefault();
       },
       resetAutoFirstRoundCombat: function () {
+        WG.clearAutoFirstRoundAdvanceTimer();
         WG.autoFirstRoundPrepared = false;
         WG.autoFirstRoundActive = false;
         WG.autoFirstRoundQueue = [];
@@ -284,6 +285,7 @@
         WG.autoFirstRoundPending = null;
       },
       cancelAutoFirstRound: function () {
+        WG.clearAutoFirstRoundAdvanceTimer();
         WG.autoFirstRoundActive = false;
         WG.autoFirstRoundQueue = [];
         WG.autoFirstRoundIndex = 0;
@@ -297,6 +299,20 @@
             .match(/(-?\d+(?:\.\d+)?)\s*秒/),
           releaseDelay = match ? Number(match[1]) * 1000 : 0;
         return Math.max(350, Number.isFinite(releaseDelay) ? releaseDelay : 0);
+      },
+      clearAutoFirstRoundAdvanceTimer: function () {
+        if (WG.autoFirstRoundAdvanceTimer != null)
+          clearTimeout(WG.autoFirstRoundAdvanceTimer);
+        WG.autoFirstRoundAdvanceTimer = null;
+      },
+      scheduleAutoFirstRoundAdvance: function (releaseTime) {
+        WG.clearAutoFirstRoundAdvanceTimer();
+        if (!WG.autoFirstRoundActive) return;
+        var delay = Math.max(0, Number(releaseTime) || 0) + 30;
+        WG.autoFirstRoundAdvanceTimer = setTimeout(function () {
+          WG.autoFirstRoundAdvanceTimer = null;
+          WG.processAutoFirstRound();
+        }, delay);
       },
       prepareAutoFirstRound: function () {
         if (!G.auto_preform || !G.in_fight || WG.autoFirstRoundPrepared) return;
@@ -320,6 +336,7 @@
         WG.autoFirstRoundPending = null;
         WG.autoFirstRoundReadyAt =
           Date.now() + Math.max(0, Number(data.rtime) || 0);
+        WG.scheduleAutoFirstRoundAdvance(data.rtime);
         return true;
       },
       getAutoFirstRoundConfirmTimeout: function () {

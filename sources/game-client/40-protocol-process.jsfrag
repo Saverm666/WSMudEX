@@ -578,7 +578,11 @@ var Process = {
     if (pending.superseded) return true;
     Dialog.consumeLayerRequest(pending.command);
     if (matchesSkill) {
-      var skillOwner = data.dialog == "master" ? Dialog.master : Dialog.skills;
+      var skillOwner =
+        DetailPopupPolicy.resolveSkillDetailOwnerKind(pending, data) ==
+        "master"
+          ? Dialog.master
+          : Dialog.skills;
       if (data.id && skillOwner.skills && skillOwner.skills[data.id])
         Object.assign(skillOwner.skills[data.id], data);
       var popupSkill =
@@ -1233,6 +1237,7 @@ var Process = {
     }
   },
   state: function (_0x511c2d) {
+    Setting.handleAutoWorkState(_0x511c2d);
     if (_0x511c2d && _0x511c2d.state) {
       var _0x41b653 = ["<span class='title'>" + _0x511c2d.state + "</span>"];
       if (_0x511c2d.commands) {

@@ -8,7 +8,7 @@
 |---|---|---|
 | `WSMudEX/` | 当前实际加载、验证和部署的浏览器扩展 | 功能修改以这里为准 |
 | `WSMudEX/sources/game-client/` | 尚未迁移客户端兼容代码的语义真源；已迁移职责进入 `client/modules/` | 迁移前只维护对应片段；迁移后修改普通模块并同步聚合入口 |
-| `WSMudEX/features/upstream-automation.js` | 当前实际加载的主自动化核心 | 固化自 `knva/wsmud_plugins@c1112c0f`；上游业务逻辑保持原样，仅保留 MV3 增量安装桥和日志面板未挂载时的提示回退 |
+| `WSMudEX/features/upstream-automation.js` | 当前实际加载的主自动化核心 | 固化自 `knva/wsmud_plugins@c1112c0f`；保留 MV3 增量安装桥、日志面板未挂载时的提示回退及已记录的兼容修复 |
 | `WSMudEX/features/plugin/` | 插件模块内核、项目新增 UI/动作功能，以及已停用的旧重构源码 | 实际加载清单以 `tools/plugin-module-layout.mjs` 的 `activePluginModuleSources` 为准；未列入者只作可恢复源码，不得覆盖上游核心 |
 | `WSMudEX/sources/automation-suite/` | 已停用的自动化模块化重构语义真源 | 不再由页面加载；保留用于回滚和差异审计，生成文件仍由同步工具校验 |
 | `WSMudEX/client/game-client.js` | 由客户端兼容片段和模块桥接生成的交付入口 | 不直接维护；功能逐批迁入 `client/modules/` |
@@ -109,7 +109,7 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | `features/plugin/daily-workflows.js` | 一键日常、门派请安、追捕扫荡及可取消等待生命周期 | `oneKeyDaily`、`oneKeyQA`、`oneKeySD`、`waitDailyWorkflow`、`finishDailyWorkflow`、`resetDailyWorkflows` |
 | `features/plugin/navigation-enhancements.js` | 智能回家/师父、组队共鸣、衙门确认后传送和潜能挂机 | `go_home`、`waitForYamenTaskResponse`、`requestBestPotentialWork` |
 | `features/plugin/travel-equipment-option.js` | 按角色保存动作栏命令的配装组规则，枚举当前按钮并等待配装确认后重放动作 | `getActionLoadoutConfig`、`listCurrentActionBarButtons`、`setActionLoadout`、`switchToActionLoadout`、`runActionBarCommandWithLoadout` |
-| `features/plugin/auto-first-round.js` | 首轮出招配置、拖动排序和每场战斗调度；每场开战重建队列，按服务端 `dispfm.id/rtime` 成功确认严格串行推进，关闭自动攻击时立即取消 | `openAutoFirstRoundDialog`、`acknowledgeAutoFirstRoundPerform`、`cancelAutoFirstRound`、`processAutoFirstRound` |
+| `features/plugin/auto-first-round.js` | 首轮出招配置、拖动排序和每场战斗调度；每场开战重建队列，按服务端 `dispfm.id/rtime` 成功确认严格串行，并以 `rtime + 30ms` 精准续跑，关闭自动攻击时立即取消 | `openAutoFirstRoundDialog`、`acknowledgeAutoFirstRoundPerform`、`scheduleAutoFirstRoundAdvance`、`cancelAutoFirstRound`、`processAutoFirstRound` |
 | `features/plugin/auto-perform-filter.js` | 原生自动出招黑名单兼容桥与运行时屏蔽同步 | `listAutoPerformSkills`、`persistDisabledPerformIds`、`unauto_pfm` |
 | `features/plugin/layout-controls.js` | 右栏聊天、侧栏尺寸、横向菜单和悬浮面板 | `initSideDashboard`、`initChatDrawer`、`initSideRailResizers` |
 | `features/plugin/ui-shell.js` | 侧栏、装备弹窗、首轮弹窗和悬浮面板 HTML | `wgui` |
@@ -170,7 +170,7 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | `client/modules/dialog-skills.js` | 自身/师父技能、书架、技能详情与学习/装备命令 | `dialog-skills`、`Dialog.skills`、`Dialog.master`、`showBooks`、`showdesc` |
 | `client/modules/dialog-channel.js` | 频道历史、协议 HTML、过滤回放与右侧聊天面板兼容 | `dialog-channel`、`channel`、`footerChanged`、`createElement` |
 | `client/modules/dialog-tasks.js` | 任务列表全量/增量协议、状态渲染与领取命令 | `dialog-tasks`、`tasks`、`update_item`、`create_items` |
-| `client/modules/dialog-jianghu.js` | 门派、普通副本、禁地和江湖入口对话框模型 | `dialog-jianghu`、`jh_fam`、`jh_fb`、`jh_ar`、`jh` |
+| `client/modules/dialog-jianghu.js` | 门派、普通副本、禁地和江湖入口对话框模型；悬浮模式 `.dialog-fb` 随内容区填满，左右列独立滚动，覆盖原生 25.5em 固定高度 | `dialog-jianghu`、`jh_fam`、`jh_fb`、`jh_ar`、`jh`；`plugin-enhancements.css` 的 `.dialog-fb` / `.fb-content` 规则 |
 | `client/modules/dialog-stats.js` | 六类排行榜、门派/装备过滤、分钟缓存和排名交互 | `dialog-stats`、`stats`、`STATS_SILDER1`、`STATS_SILDER2` |
 | `client/modules/dialog-keys.js` | 快捷键分组、设置页录入、持久化与全局按键执行 | `dialog-keys`、`keys`、`init_key`、`record_press`、`keypress` |
 | `client/modules/dialog-shop.js` | 商城三类货币、商品协议、折扣/限购渲染和购买入口 | `dialog-shop`、`shop`、`format_items`、`create_items`、`get_item` |
@@ -182,6 +182,7 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | `client/modules/network-api.js` | WebSocket 原生封装和账户 API | `network-api`、`WSClient`、`API.UserAPI` |
 | `client/modules/confirmation.js` | 确认输入、数量调节和二次操作命令 | `confirmation`、`Confirm`、`Show_*`、`get_countelement` |
 | `client/modules/script-engine.js` | 页面脚本解析、动作、变量展开和兼容状态 | `script-engine`、`SCRIPT`、`run`、`actions`、`vars` |
+| `client/modules/settings.js` | 高级设置 `auto_work` 以 `#` 开头时按角色保存在客户端，服务端设为 0；学习/练习/打坐/读书结束时执行 SCRIPT，主动 stopstate 不触发 | `WSMudEX_auto_work_script_`、`handleAutoWorkState`、`observeAutoWorkCommand`；`Process.state`、`SendCommand` 与上游 `send_cmd` 注入触发/停止观察 |
 | `features/plugin/raid-flow-compiler.js` | Raid 流程源码切分、预编译规则和控制流编译服务 | `raid-flow-compiler`、`PrecompileRuleCenter`、`compile`、`precompile` |
 | `features/raid-flow-engine.js` | Raid UI、业务命令注册与模块兼容桥；执行运行时、断言、目录、快捷流程、云端同步、房间/桃花岛及协议观察由服务提供 | `raidFlowExecutionRuntime`、`GetDungeonFlow`、`raidFlowTHIsland`、`raidFlowRoom`、`raidFlowObservers` |
 | `features/trigger-system.js` | 触发器服务创建、兼容全局发布、初始化重试和角色生命周期薄入口 | `TriggerUI`、`TriggerConfig`、`TriggerCenter`、`onLogin` |
@@ -194,7 +195,7 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | 锚点 | 约当前行 | 职责 |
 |---|---:|---|
 | `function ContainerCommand` | 650 | 委托处理页面内带 `[cmd]` 的点击 |
-| `function SendCommand` | 801 | 统一发送游戏命令；详情命令识别发生在调用它之前的 `ContainerCommand` |
+| `function SendCommand` | 801 | 统一发送游戏命令；详情命令识别发生在调用它之前的 `ContainerCommand`；拓展 `init_extend_item` 自动补 `#` 前缀，由 `SCRIPT.run` 顺序解析；`85-utilities.jsfrag` 注入的原生定时器须绑定 `window`，否则 `#wait` 在 Chromium 抛出 Illegal invocation |
 | `function HandlerMenuCommand` | 861 | 底栏/菜单动作分派 |
 | `MessageQueue` | 由 `client/modules/message-queue.js` 创建 | 主消息区和频道消息队列 |
 | `function ReceiveMessage` | 976 | 文本消息入口；公共文本始终进入原消息队列，不作为详情响应源 |
@@ -225,6 +226,7 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | `Process.itemadd/items/itemremove` | 由 `client/modules/room-renderer.js` 挂回；当前场景人物列表增量/全量维护 |
 | `Process.create_roomitem` | 由 `client/modules/room-renderer.js` 挂回；场景人物行、血蓝条和血蓝数值 HTML |
 | `Process.room/exits` | 由 `client/modules/room-renderer.js` 挂回；房间信息和出口渲染 |
+| 房间描述精简与入口提取 | `features/upstream-automation.js` 的 `receive_message`（锚点“精简房间描述、生成功能按钮”）；早于 `Process.room` 执行，统一 CMD 标签大小写并对空匹配兜底；军营门与广场大榕树回归见 `tools/test-room-description.py` |
 | `Process.resetRoomRendererSession` | 清理跨房间状态动画、详情弹窗和房间逻辑快照；断线、跨服和角色变化调用 |
 | `Process.prepareDetailPopup/queueDetailPopupRequest` | 记录技能、背包物品、排行榜详情的命令、来源层与请求顺序；队列有界 |
 | `Process.matchesDetailPopupData/takeDetailPopupRequest/consumeDetailPopupData` | 只按结构化协议类型、对象 ID 和请求顺序关联响应；同来源快速点击时旧请求降级 |
@@ -241,10 +243,10 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 |---|---:|---|
 | `Dialog.skills/master` | 由 `client/modules/dialog-skills.js` 创建，兼容桥约第 2,958 行 | 当前/师父技能、书架、`cha`、`checkskill`、学习与装备 |
 | `Dialog.skillcalc` | 由 `client/modules/skill-calculator.js` 创建，兼容桥位于 `61-dialog-skills.jsfrag` | 个人/师傅技能潜能、速度与时间计算；保留 `_skillcalc` 命令和浮动父层回退 |
-| `Dialog.pack` | 2991 | 自己的背包和装备，`pack`、`checkobj` |
+| `Dialog.pack` | 2991 | 自己的背包和装备，`pack`、`checkobj`；悬浮模式 `.dialog-pack` 填满高度，装备/物品/详情列独立滚动，样式见 `plugin-enhancements.css` |
 | `Dialog.pack2` | 3694 | 查看他人的装备/背包 |
 | `Dialog.trade` | 3829 | 交易 |
-| `Dialog.list` | 4026 | 通用列表 |
+| `Dialog.list` | 4026 | 仓库及通用列表；悬浮模式 `.dialog-list` 填满高度，库存/背包/详情列独立滚动，样式见 `plugin-enhancements.css` |
 | `Dialog.channel` | 由 `client/modules/dialog-channel.js` 创建，兼容桥约第 4,419 行 | 聊天频道历史 |
 | `Dialog.setting` | 4429 | 游戏客户端设置 |
 | `Dialog.tasks/stats/jh_*` | 由对应 `client/modules/dialog-*.js` 创建，兼容桥约第 4,758–4,785 行 | 任务、排行榜、门派/副本/区域/江湖入口 |
@@ -300,20 +302,20 @@ rg -n "receive_message:|run_hook:|function ReceiveMessage|function ReceiveData|f
 | 当前场景人物排序 | `client/modules/room-renderer.js`：`itemadd`、`items` | `Process.player`、`.room_items` | 玩家始终固定最上方；不再提供“自己优先”设置项 |
 | 人物血蓝与玩家标记 | `client/modules/room-renderer.js`：`formatStatusNumber`、`formatRoomItemName`、`create_roomitem`；`automation-suite.js`：`.item-vital-values`、`.player-name-marker` 样式 | `.item-status`、`.progress.hp/.mp`、`.item-name` | 两个条仍纵排；两个数值横排、整体右对齐并贴在条左边；数字使用半角千分位逗号；当前玩家姓名后、`〈挖矿〉` 等状态前插入醒目黄色精炼星标 `★` |
 | 点击场景人物或物品 | `game-client.js`：`selectItem`、`isCharacterItem`、`prepareCharacterTextView`、`item`、`cmds` | `type=item`、`popupKind=character/scene-item`、`look <id>` 纯文本 | 首次点击使用结构化 `select <id>` 打开人物或物品操作窗；人物窗内“查看”发送真正的 `look <id>`，完整结果仍由主信息栏显示，操作窗保持打开并提示结果位置。绝不截取公共文本流冒充弹窗响应；人物后续 `cmds` 追加到同一操作窗 |
-| 技能详情自由窗 | `game-client.js`：`isPopupDetailCommand` 至 `consumeDetailPopupData`；`client/modules/detail-popup-policy.js` | `checkskill`、`dialog=skills/master` | 必须带技能 ID 和 `desc`；不使用原生 `.dialog` 覆盖场景；`checkskill ... help` 不按师父技能等待 |
+| 技能详情自由窗 | `game-client.js`：`isPopupDetailCommand` 至 `consumeDetailPopupData`；`client/modules/detail-popup-policy.js` | `checkskill`、`dialog=skills/master` | 必须带技能 ID 和 `desc`；不使用原生 `.dialog` 覆盖场景；`checkskill ... help` 不按师父技能等待；师父 `checkskill` 在参考服务端仍返回 `dialog=skills`，按请求来源而非响应 dialog 选择 `Dialog.master` |
 | 江湖战利品/门派武功详情 | 同上；`consumeDetailPopupMessage` | `look3 <n> of fb_<id>`、`checkskill <id> help` | 只消费描述类文本；技能升级、练习/学习状态、心得和突破丹提示留在信息栏 |
 | 背包/装备详情自由窗 | 同上；`Dialog.pack/pack2` | `checkobj ... from item/eq` | 保留可执行的装备、使用等命令 |
 | 排行榜人物详情自由窗 | `queueDetailPopupRequest/consumeDetailPopupData`、`createRankingPopupContent`、`Dialog.stats` | `stats ...`、`type=item` 或 `dialog=score` | 只有可关联的结构化人物描述或属性数据进入自由详情窗；离线/错误等纯文本仍进入主消息区，兵器谱物品不按人物处理 |
 | 自由详情窗行为 | `ensureItemPopup`、`initItemPopupDrag`、`closeItemPopup`；对应 CSS | `.WG_item_popup*`、`WG_item_popup_position` | 非模态；可拖动；点窗外不关闭且可继续操作页面；Esc 只关闭视觉上最顶层，随后逐层返回并恢复焦点 |
 | 遮罩类弹窗行为 | `automation-suite.js`：装备选择器、其他明确 modal 的弹窗 | `.WG_equipment_picker` | 只有遮罩类弹窗允许点击遮罩关闭；不要把自由窗改成同样逻辑 |
 | 左侧资源栏 | `features/plugin/dashboard-equipment.js`：`updateSideDashboard`、`scheduleDashboardStateRefresh`、`applyDashboardScoreSnapshot`、`handleEquipmentPickerEvent`、`updateQuickLoadoutState`、`beginDashboardEquipmentBatch`、`finishDashboardEquipmentBatch`、`syncDashboardEquipmentLegacyState`、`getQuickLoadoutNames`、`applyQuickLoadoutNames`；`ui-shell.js`；`layout-controls.js`；`plugin-settings.js` | `.WG_resource_*`、`.WG_quick_loadouts`、`.WG_plugin_settings_loadouts`、`data-equipment-group`、`eq_group`、`<角色>_WG_quick_loadout_names_v1`、`G.score`、`G.items`、`G.eqs`、`Dialog.pack` | 登录、换装、原生配装组切换及副本耗精命令后合并发送静默 `pack`/`score`；插件装备状态与原生 `G.eqs` 使用独立数组，快速切换期间等最终 `eq_group` 事件后再刷新左栏，避免逐件 `uneq`/`eq` 中间态闪烁；同一权威响应同步左栏、人物缓存和原生背包缓存。资源区与装备列表之间固定提供配装 1/2/3 快捷键，分别发送原生 `eqgroup 0/1/2`，并按背包响应的 `eq_group` 标记当前组；插件设置可按角色自定义三个按钮名称，空名称回退为数字。精力条区分常驻与限时精力，技能进度仍会静默校准潜能 |
-| 智能挂机 | `features/plugin/navigation-enhancements.js`：`requestBestPotentialWork`、`rankPotentialWorks`、`startPotentialWork`、`schedulePotentialWorkAutoCheck`；`travel-equipment-option.js`：`runAfterBuiltinActionLoadout` | `dialog=events`、`state`、`G.potentialWorkCurrentId`、挖矿/钓鱼/采药活动描述、`builtin.work` | 通过原生扩展动作 `#wg work` 进入时可先切换用户指定的配装组，再静默计算当前潜能收益最高活动。插件不再扫描铁镐、鱼竿或药书并逐件换装；前台在线期间仍每 5 秒复核收益，只在出现严格更高的正收益项时切换，并列最高保持当前地点。断线、换角色、停挂机或进入其他状态会清理定时器和 Hook；活动请求超时时保留当前地点。 |
+| 智能挂机 | `features/plugin/navigation-enhancements.js`：`requestBestPotentialWork`、`rankPotentialWorks`、`startPotentialWork`、`schedulePotentialWorkAutoCheck`；实际加载的 `features/upstream-automation.js`：状态 Hook、登录/断线清理；`travel-equipment-option.js`：`runAfterBuiltinActionLoadout` | `dialog=events`、`state`、`G.potentialWorkCurrentId`、挖矿/钓鱼/采药活动描述、`builtin.work` | 通过原生扩展动作 `#wg work` 进入时可先切换用户指定的配装组，再静默计算当前潜能收益最高活动。插件不再扫描铁镐、鱼竿或药书并逐件换装；活动回包经 `protocol-compatibility.js` 时保持数组结构，物品解码仅限 `pack/list`。在线挂机期间每 5 秒复核收益，独立于原生 `Setting.auto_work` 命令配置；实际状态入口负责启动和停止巡检，只在出现严格更高的正收益项时切换，并列最高（含零加成）保持当前地点。断线、换角色、停挂机或进入其他状态会清理定时器和 Hook；活动请求超时时保留当前地点。实际路线表已含药林/江边；`beginPotentialWorkAt` 确认房间到达后才开工，8 秒超时不开工，停止/断线/换角色取消到达等待。选择/已最高/钓鱼回退提示经 `showPotentialWorkMessage → ReceiveMessage` 进入游戏正文消息队列，周期无变化静默。 |
 | 左侧装备栏 | `automation-suite.js`：`dashboardEquipmentSlots`、`openEquipmentPicker`、`renderEquipmentPicker`；`ui-shell.js`、`layout-controls.js` | `.WG_quick_loadout`、`.WG_equipment_item` | 顶部三个按钮与原生背包配装 1/2/3 一一对应；点击装备栏位显示背包内对应位置物品，快速装备优先，再按稀有度排序 |
 | 装备位置缓存 | `loadEquipmentSlotCache`、`saveEquipmentSlotCache`、`rememberEquipmentSlot` | `<角色>_WG_equipment_slot_cache_v1` | GM 本地持久化，最多 500 条；减少重复 `checkobj` 请求 |
 | 动作前配装 | `getActionLoadoutConfig`、`listCurrentActionBarButtons`、`renderActionLoadoutRules`、`switchToActionLoadout`、`runActionBarCommandWithLoadout`；`ContainerCommand` | `<角色>_WG_action_loadouts_v1`、`eqgroup 0/1/2`、`dialog=pack`、`eq_group`、`.room-commands > .act-item` | 设置页使用单列，只为当前动作栏中实际存在的按钮选择“不换装/配装1/2/3”，不展示历史或额外内置动作清单。已配置动作先切组，收到配装确认后再执行；未配置动作完全沿用原路径。配置按角色和完整按钮命令隔离。 |
 | 装备选择弹窗排版 | `syncEquipmentPickerTypography`、`renderEquipmentPicker` | `.WG_equipment_picker_*` | 标题区直接显示当前装备；字号继承左侧栏；不显示排序规则说明 |
 | 原生扩展动作桥接 | `game-client.js`： `SCRIPT.actions.wg`；`features/plugin/dashboard-equipment.js`：`runNativeExtensionAction`；`navigation-enhancements.js`：智能动作实现 | `#wg home`、`#wg master`、`#wg wumiao`、`#wg cleanup`、`#wg work`、`#wg yamen`、`#wg auto` | 桥接回家、师父、武庙、清包、智能挂机、衙门追捕传送和自动攻击切换；各动作可在插件设置中独立选择执行前配装。动作项仍由用户在“设置 → 扩展”中手动添加、启用或删除，初始化不自动补齐。 |
-| 自动攻击状态、便捷出招配置与首轮调度 | `updateNativeAutoAttackActionState`、`auto_preform_switch`、`renderNativeAutoPerformConfig`、`saveNativeAutoPerformSettings`、`openAutoFirstRoundDialog`、`acknowledgeAutoFirstRoundPerform`、`processAutoFirstRound`；`Combat.create_actions` | `#wg auto`、`.WG_native_auto_active`、`.WG_plugin_auto_toggle`、`.WG_plugin_auto_order`、`.WG_plugin_auto_blacklist`、`.dialog-custom [for='auto_pfm']`、`#unauto_pfm`、`G.auto_preform`、`dispfm.id/rtime`、`roleid_unauto_pfm` | 原生扩展栏中命令严格等于 `#wg auto` 的按钮会随状态同步；插件设置页自动读取当前 `G.skills`/`Combat.Skills`，左侧拖动排序、右侧开关启用状态。保存顺序时写入扩展的角色首轮队列，并以 `setting auto_pfm none` 关闭会在开战瞬间连续执行全部命令的服务端原生队列；黑名单仍通过原生输入事件/兼容桥写回原存储键。每次 `combat.start` 都重新建立首轮队列；当前招只有收到 ID 相符的服务端 `dispfm` 成功协议才推进，按本次准确 `rtime` 等待，超时只重试当前招且有三次上限。队列完成后恢复冷却优先调度。 |
+| 自动攻击状态、便捷出招配置与首轮调度 | `updateNativeAutoAttackActionState`、`auto_preform_switch`、`renderNativeAutoPerformConfig`、`saveNativeAutoPerformSettings`、`openAutoFirstRoundDialog`、`acknowledgeAutoFirstRoundPerform`、`scheduleAutoFirstRoundAdvance`、`processAutoFirstRound`；`Combat.create_actions` | `#wg auto`、`.WG_native_auto_active`、`.WG_plugin_auto_toggle`、`.WG_plugin_auto_order`、`.WG_plugin_auto_blacklist`、`.dialog-custom [for='auto_pfm']`、`#unauto_pfm`、`G.auto_preform`、`dispfm.id/rtime`、`roleid_unauto_pfm` | 原生扩展栏中命令严格等于 `#wg auto` 的按钮会随状态同步；插件设置页自动读取当前 `G.skills`/`Combat.Skills`，左侧拖动排序、右侧开关启用状态。保存顺序时写入扩展的角色首轮队列，并以 `setting auto_pfm none` 关闭会在开战瞬间连续执行全部命令的服务端原生队列；黑名单仍通过原生输入事件/兼容桥写回原存储键。每次 `combat.start` 都重新建立首轮队列；当前招只有收到 ID 相符的服务端 `dispfm` 成功协议才推进，按本次准确 `rtime + 30ms` 精准续跑，原 300ms 循环仅作兜底；超时只重试当前招且有三次上限。队列完成后恢复冷却优先调度。 |
 | 智能回家、师父传送与仓库 | `go_home`、`go_master`、`cancelSmartHomeWatch`、`runAfterBuiltinActionLoadout`；游戏“设置 → 扩展”手动添加 | `#wg home`、`#wg master`、`builtin.home`、`builtin.master`、`eqgroup`、`store` | 回家与师父各自使用用户选择的配装组，不再计算最高悟性或学习效率组合。进入 `home/...` 时保留住宅落点；确认落到 `yz/home` 住宅大门时再导航到“扬州城-有间客栈”。监听最长 10 秒，重复点击会先清理旧 Hook；仓库仍直接使用游戏原生命令。 |
 | 右栏聊天、记录与输入面板 | `initChatDrawer`、`toggleSideChatPanel`、`initSideChatPanel`、`setSideChatPanelOpen`；`game-client.js`：`Dialog.channel.show`、`ShowChat` | 原生 `[command='showchat']`、`.WG_side_chat_view`、`.WG_side_chat_history_host`、`.WG_side_chat_composer` | 聊天视图首次创建时默认开启；同一页面内用户手动关闭后，后续仪表盘重新初始化会保留关闭状态，不强行重开。中间自定义聊天按钮已移除，原生聊天按钮负责切换。关闭后右栏保持原宽度、黑色占位和宽度拖动能力，只隐藏聊天内容。右栏上方 7 个历史筛选和下方 6 个发送频道均固定单行紧凑显示 |
 | 两侧栏尺寸 | `sideRailSizeKey` 和相邻 resize 逻辑 | `WG_side_rail_widths` | 宽度保存在 `localStorage` |
@@ -351,7 +353,7 @@ rg -n "prepareDetailPopup|consumeDetailPopupData|consumeDetailPopupMessage|WG_it
 | — | `type: room/exits` | 同名 `Process` 方法 | 当前房间和出口 |
 | — | `type: sc` | `Process.sc → Combat.StatusChanged` | 血蓝、状态等变化 |
 | `cha` / `cha none` | `dialog: skills` | `Dialog.skills` | 自己的技能列表 |
-| `checkskill <id> [来源]` | 通常为 `dialog: skills/master`，含 `id/desc`；`help` 在参考版本可能返回纯文本 | 详情自由窗或对应 Dialog | 仅带 ID 的结构化响应进入技能窗；`help` 走文本详情窗 |
+| `checkskill <id> [来源]` | 参考服务端始终为 `dialog: skills`（含 `id/desc`）；现网若返回 `dialog: master` 同样接受；`help` 在参考版本可能返回纯文本 | 详情自由窗或对应 Dialog | 仅带 ID 的结构化响应进入技能窗；师父详情按点击命令来源绑定 `Dialog.master`；`help` 走文本详情窗 |
 | `look3 <n> of fb_<id>` | 参考版本为物品或可获得技能的纯文本 | 江湖战利品详情自由窗 | 不把挖矿/升级等公共文本当作战利品响应 |
 | `pack` / `pack none` | `dialog: pack`，含 `items/eqs` | `Dialog.pack`、装备选择器 hook | 背包和当前装备 |
 | `checkobj <id> from item` | `dialog: pack`，含 `desc` | 物品详情自由窗 | 背包物品详情 |

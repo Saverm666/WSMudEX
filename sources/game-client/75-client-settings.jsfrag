@@ -1,9 +1,12 @@
 const ClientSettings = unsafeWindow.WSMudClient.createModule("settings", {
   jquery: $,
   documentRef: document,
+  hostWindow: window,
   getDialog: function () { return Dialog; },
   getProcess: function () { return Process; },
   getCombat: function () { return Combat; },
+  getScript: function () { return SCRIPT; },
+  isConnected: function () { return GameClient && GameClient.Connected(); },
   sendCommand: SendCommand,
 });
 const MAP_DIR_EXITS = ClientSettings.MAP_DIR_EXITS;

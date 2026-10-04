@@ -1321,6 +1321,59 @@ body.WG_map_modal_open {
     box-sizing: border-box;
     max-width: 100%;
 }
+.dialog.WG_floating_dialog > .dialog-content > .dialog-fb {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+}
+.dialog.WG_floating_dialog .dialog-fb > .fb-left,
+.dialog.WG_floating_dialog .dialog-fb > .fb-right {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.dialog.WG_floating_dialog .dialog-fb > .fb-left {
+    margin-top: 0;
+    padding-top: 0.5em;
+}
+.dialog.WG_floating_dialog .fb-left > .fb-content {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+}
+.dialog.WG_floating_dialog > .dialog-content > .dialog-pack,
+.dialog.WG_floating_dialog > .dialog-content > .dialog-list {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+}
+.dialog.WG_floating_dialog .dialog-pack > .eq-list,
+.dialog.WG_floating_dialog .dialog-pack > .obj-list,
+.dialog.WG_floating_dialog .dialog-pack > .obj-desc,
+.dialog.WG_floating_dialog .dialog-list > .trade-list,
+.dialog.WG_floating_dialog .dialog-list > .obj-list,
+.dialog.WG_floating_dialog .dialog-list > .obj-desc,
+.dialog.WG_floating_dialog .dialog-list > .otype-list {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.dialog.WG_floating_dialog .dialog-pack > .eq-list,
+.dialog.WG_floating_dialog .dialog-pack > .obj-list,
+.dialog.WG_floating_dialog .dialog-pack > .obj-desc {
+    float: none;
+    flex: 1 1 0;
+}
 .dialog.WG_floating_dialog > .dialog-footer {
     min-width: 0;
     flex: 0 0 auto;

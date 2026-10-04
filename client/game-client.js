@@ -839,6 +839,7 @@ function SendCommand(_0x557412) {
     typeof window.WG.observeDashboardCommand == "function" &&
     window.WG.observeDashboardCommand(_0x557412);
   Dialog.extend.record(_0x557412);
+  Setting.observeAutoWorkCommand(_0x557412);
   GameClient.Send(_0x557412);
 }
 function ChannelChanged() {
@@ -1567,7 +1568,11 @@ var Process = {
     if (pending.superseded) return true;
     Dialog.consumeLayerRequest(pending.command);
     if (matchesSkill) {
-      var skillOwner = data.dialog == "master" ? Dialog.master : Dialog.skills;
+      var skillOwner =
+        DetailPopupPolicy.resolveSkillDetailOwnerKind(pending, data) ==
+        "master"
+          ? Dialog.master
+          : Dialog.skills;
       if (data.id && skillOwner.skills && skillOwner.skills[data.id])
         Object.assign(skillOwner.skills[data.id], data);
       var popupSkill =
@@ -2222,6 +2227,7 @@ var Process = {
     }
   },
   state: function (_0x511c2d) {
+    Setting.handleAutoWorkState(_0x511c2d);
     if (_0x511c2d && _0x511c2d.state) {
       var _0x41b653 = ["<span class='title'>" + _0x511c2d.state + "</span>"];
       if (_0x511c2d.commands) {
@@ -4964,9 +4970,12 @@ const SCRIPT = unsafeWindow.WSMudClient.createModule("script-engine", {
 const ClientSettings = unsafeWindow.WSMudClient.createModule("settings", {
   jquery: $,
   documentRef: document,
+  hostWindow: window,
   getDialog: function () { return Dialog; },
   getProcess: function () { return Process; },
   getCombat: function () { return Combat; },
+  getScript: function () { return SCRIPT; },
+  isConnected: function () { return GameClient && GameClient.Connected(); },
   sendCommand: SendCommand,
 });
 const MAP_DIR_EXITS = ClientSettings.MAP_DIR_EXITS;
@@ -4989,7 +4998,7 @@ const ClientUtilities = unsafeWindow.WSMudClient.createModule("utilities", {
   hostWindow: window,
   documentRef: document,
   navigator,
-  timers: { setTimeout },
+  timers: { setTimeout: setTimeout.bind(window) },
   json: JSON,
   DateConstructor: Date,
   PromiseConstructor: Promise,

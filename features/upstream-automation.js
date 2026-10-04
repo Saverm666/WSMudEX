@@ -238,6 +238,7 @@
             },
             set onclose(fn) {
                 ws.onclose = (e) => {
+                    WG.stopPotentialWorkAutoCheck && WG.stopPotentialWorkAutoCheck();
                     WG.online = false;
                     G.connected = false;
                     auto_relogin = GM_getValue(roleid + "_auto_relogin", auto_relogin);
@@ -362,6 +363,9 @@
         var send_cmd = function (cmd, no_queue) {
             if (ws && ws.readyState == 1) {
                 cmd = cmd instanceof Array ? cmd : cmd.split(';');
+                if (unsafeWindow.Setting && typeof unsafeWindow.Setting.observeAutoWorkCommand === 'function') {
+                    unsafeWindow.Setting.observeAutoWorkCommand(cmd.join(';'));
+                }
                 if (no_queue) {
                     for (var i = 0; i < cmd.length; i++) {
                         if (G.cmd_echo) {
@@ -629,6 +633,8 @@
         "扬州城-衙门正厅": "jh fam 0 start;go west;go north;go north",
         "扬州城-镖局正厅": "jh fam 0 start;go west;go west;go south;go south",
         "扬州城-矿山": "jh fam 0 start;go west;go west;go west;go west",
+        "扬州城-江边": "jh fam 0 start;go north;go north;go north;go north",
+        "扬州城-药林": "jh fam 0 start;go east;go east;go east;go east;go south",
         "扬州城-喜宴": "jh fam 0 start;go north;go north;go east;go up",
         "扬州城-擂台": "jh fam 0 start;go west;go south",
         "扬州城-当铺": "jh fam 0 start;go south;go east",
@@ -6493,14 +6499,15 @@
                         data.desc = `<span id="show">${desc1} <hic>»»»</hic></span><span id="more" style="display:none">${desc0}</span><span id="hide" style="display:none"> <hiy>«««</hiy></span>`
                         //data.desc = `${desc1}<span id="show"> <hic>»»»</hic></span><span id="more" style="display:none">${desc2}</span><span id="hide" style="display:none"> <hiy>«««</hiy></span>`;
                     }
-                    if (room_desc.includes("cmd")) {
+                    if (/cmd/i.test(room_desc)) {
                         room_desc = room_desc.replace("<hig>椅子</hig>", "椅子");//新手教程的椅子
                         room_desc = room_desc.replace("<CMD cmd='look men'>门(men)<CMD>", "<cmd cmd='look men'>门</cmd>");//兵营副本的门
+                        room_desc = room_desc.replace(/<(\/?)cmd\b/gi, "<$1cmd");//兼容正常闭合的大写 CMD 标签
                         room_desc = room_desc.replace(/span/g, "cmd"); //古墓里的画和古琴是<span>标签
                         room_desc = room_desc.replace(/"/g, "'"); // "" => ''
                         room_desc = room_desc.replace(/\((.*?)\)/g, "");//去除括号和里面的英文单词
                         //console.log(room_desc);
-                        let cmds = room_desc.match(/<cmd cmd='([^']+)'>([^<]+)<\/cmd>/g);
+                        let cmds = room_desc.match(/<cmd cmd='([^']+)'>([^<]+)<\/cmd>/g) || [];
                         //console.log(cmds);
                         cmds.forEach(cmd => {
                             let x = cmd.match(/<cmd cmd='(.*)'>(.*)<\/cmd>/);
@@ -7976,6 +7983,7 @@
                 switch (data.type) {
                     case "login":
                         var shouldGreetChief = !G.connected || G.id != data.id;
+                        WG.stopPotentialWorkAutoCheck && WG.stopPotentialWorkAutoCheck();
                         G.id = data.id;
                         G.connected = true;
                         WG.online = true;
@@ -8331,6 +8339,7 @@
                 }
             });
             WG.add_hook("state", function (data) {
+                WG.handlePotentialWorkState(data);
                 console.dir(data);
                 if (data.type == 'state' && data.state == undefined) {
                     if (G.room_name.indexOf('副本') >= 0 || G.room_name.indexOf('襄阳') >= 0 ||

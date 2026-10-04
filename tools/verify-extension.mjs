@@ -3787,12 +3787,21 @@ assert(
       dialog: "master",
       id: "force",
       desc: "师父技能",
-    }),
+    }) &&
+    detailQueue.matchesDetailPopupData(masterSkillRequest, {
+      dialog: "skills",
+      id: "force",
+      desc: "师父技能",
+    }) &&
+    detailPopupPolicy.resolveSkillDetailOwnerKind(masterSkillRequest, {
+      dialog: "skills",
+    }) === "master",
   "技能详情响应未按自己的技能/师父技能来源隔离",
 );
 assert(
   gameClientSource.includes("cancelDetailPopupRequestsForSurface") &&
-    detailPopupPolicySource.includes("data.dialog == pending.expectedDialog"),
+    detailPopupPolicySource.includes("data.dialog == pending.expectedDialog") &&
+    gameClientSource.includes("resolveSkillDetailOwnerKind(pending, data)"),
   "非详情操作未取消当前界面的详情等待，或技能详情缺少来源对话框约束",
 );
 assert(
@@ -4202,6 +4211,39 @@ const upstreamAutomationSource = readFileSync(
   join(extensionRoot, "features/upstream-automation.js"),
   "utf8",
 );
+// Execute the shipped room-message branch, including protocol forwarding.
+const roomDescriptionMarker = upstreamAutomationSource.indexOf("//精简房间描述、生成功能按钮");
+const roomDescriptionBranch = upstreamAutomationSource.slice(
+  upstreamAutomationSource.lastIndexOf("            if (data.type == 'room') {", roomDescriptionMarker),
+  upstreamAutomationSource.indexOf("\n            WG.run_hook(data.type, data);", roomDescriptionMarker),
+);
+const renderUpstreamRoomDescription = new Function(
+  "data", "msg", "deepCopy", "WG", "ws_on_message", "$", roomDescriptionBranch,
+);
+for (const [description, command, name] of [
+  ["南边有一个<CMD cmd='look men'>门(men)</CMD>。", "look men", "门"],
+  ['南边有一个<CMD cmd="look men">门(men)</CMD>。', "look men", "门"],
+  ["南边有一个<CMD cmd='look men'>门(men)<CMD>。", "look men", "门"],
+  ["中央有一棵<cmd cmd='look tree'>大榕树(tree)</cmd>，盘根错节，据传已有千年的树龄。", "look tree", "大榕树"],
+  ["墙上有<span cmd='look painting'>画</span>。", "look painting", "画"],
+  ["这里是一间没有可交互物品的普通房间，描述足够长以触发精简显示。", null, null],
+  ["墙上有<cmd cmd='look unknown'><hig>未知物品</hig></cmd>。", null, null],
+]) {
+  const roomData = { type: "room", name: "测试房间", desc: description, commands: [] };
+  let forwardedRoom = null;
+  let hookCount = 0;
+  renderUpstreamRoomDescription(
+    roomData, { data: JSON.stringify(roomData) }, (value) => ({ ...value }),
+    { run_hook() { hookCount++; } },
+    (message) => { forwardedRoom = JSON.parse(message.data); },
+    () => ({ click() {} }),
+  );
+  assert(hookCount === 1 && forwardedRoom?.type === "room", "房间描述解析异常阻断房间消息");
+  if (command) {
+    assert(forwardedRoom.commands[0]?.cmd === command, "房间描述命令提取失败");
+    assert(forwardedRoom.desc.includes(`<cmd cmd='${command}'>${name}</cmd>`), "房间描述未保留可点击入口");
+  }
+}
 for (const directCommandLegacyAccess of [
   "for (let e = 0; e < roomData.length",
   "for (o of packData)",
@@ -9382,12 +9424,12 @@ for (const sideDashboardContract of [
   "startPotentialWork",
   "startPreparedPotentialWork",
   "startFishingPotentialWork",
-  'Promise.resolve(WG.go("扬州城-江边"))',
+  'WG.beginPotentialWorkAt("扬州城-江边", "diao", "fishing")',
   "stopPotentialWorkAutoCheck",
   "schedulePotentialWorkAutoCheck",
   "handlePotentialWorkState",
   "potentialWorkAutoCheckTimer",
-  "currentWork.bonus == ranked[0].bonus",
+  "currentWork.bonus >= ranked[0].bonus",
   "finish([], true)",
   "ensureNativeControlsVisible",
   "WG_rail_resizer_left",
@@ -9417,6 +9459,7 @@ for (const sideDashboardContract of [
   "processAutoFirstRound",
   "acknowledgeAutoFirstRoundPerform",
   "getAutoFirstRoundConfirmTimeout",
+  "scheduleAutoFirstRoundAdvance",
   'WG.Send("perform " + skillId)',
   '"_WG_auto_first_round_v1"',
   "首轮结束后，恢复冷却完成即出招",
@@ -9913,6 +9956,44 @@ assert(
     potentialWorkRanking[2].bonus === 0,
   "智能挂机没有按当前活动的潜能收益正确排序",
 );
+const medicineValleyRanking = potentialWorkSandbox.WG.rankPotentialWorks([
+  ["mine", "挖矿指南", "获得经验+20。"],
+  ["herb", "<hio>药王新篇</hio>", "三转巅峰成为了新任药王谷谷主，采药获得的经验+40。"],
+]);
+assert(
+  medicineValleyRanking[0].id === "herbalism" &&
+    medicineValleyRanking[0].bonus === 40,
+  "用户提供的药王新篇活动未识别为采药加成",
+);
+const compatibilityHooks = [];
+const compatibilityWG = {
+  add_hook(_type, callback) { compatibilityHooks.push(callback); return compatibilityHooks.length; },
+};
+runInNewContext(
+  readFileSync(join(extensionRoot, "features/plugin/protocol-compatibility.js"), "utf8"),
+  {
+    window: { WSMudPlugin: {
+      createService: () => packDataCodec,
+      registerFeature(_name, install) { install({ WG: compatibilityWG, G: {} }); },
+    } },
+    setTimeout, clearTimeout,
+  },
+);
+for (const dialog of ["events", "skills", "master", "team"]) {
+  const rows = [["herb", "药王新篇", "采药获得的经验+40。"]];
+  const event = { type: "dialog", dialog, items: rows };
+  compatibilityHooks[0](event);
+  assert(event.items === rows && Array.isArray(event.items[0]),
+    "非物品对话框被协议兼容层错误解码: " + dialog);
+  if (dialog === "events")
+    assert(potentialWorkSandbox.WG.rankPotentialWorks(event.items)[0].bonus === 40,
+      "经过实际协议兼容层后活动收益丢失");
+}
+for (const dialog of ["pack", "list"]) {
+  const event = { type: "dialog", dialog, items: [["铁镐", "pick", 1, 1]] };
+  compatibilityHooks[0](event);
+  assert(event.items[0].id === "pick", "物品回包未正确解码: " + dialog);
+}
 
 const smartEquipmentSandbox = { WG: {} };
 smartEquipmentSandbox.WG.parseSmartPercentTotal = readDashboardMethod(
@@ -9987,7 +10068,7 @@ const potentialWorkAutoSandbox = {
     connected: true,
     potentialWorkSelectionPending: false,
   },
-  Setting: { auto_work: true },
+  Setting: { auto_work: false },
   WG: {
     online: true,
     requestBestPotentialWork(currentWorkId, quietWhenUnchanged) {
@@ -10027,7 +10108,7 @@ assert(
     potentialWorkRequests[0].currentWorkId === "mining" &&
     potentialWorkTimers.length === 1 &&
     potentialWorkTimers[0].delay === 5000,
-  "进入潜能挂机状态后没有立即检查并启动 5 秒周期复查",
+  "关闭原生自动工作时进入潜能挂机状态后没有立即检查并启动 5 秒周期复查",
 );
 potentialWorkAutoSandbox.WG.handlePotentialWorkState({ state: "正在挖矿中" });
 assert(
@@ -10049,6 +10130,12 @@ assert(
     potentialWorkAutoSandbox.G.potentialWorkCurrentId === undefined &&
     potentialWorkAutoSandbox.G.potentialWorkAutoCheckTimer === undefined,
   "断线后潜能挂机周期复查没有停止",
+);
+assert(
+  upstreamAutomationSource.includes('WG.handlePotentialWorkState(data);') &&
+    /ws\.onclose = \(e\) => \{\s*WG\.stopPotentialWorkAutoCheck/.test(upstreamAutomationSource) &&
+    /case "login":[\s\S]*?WG\.stopPotentialWorkAutoCheck[\s\S]*?G\.id = data\.id/.test(upstreamAutomationSource),
+  "实际加载的上游核心未接入挂机状态巡检、断线或登录清理",
 );
 
 let skillProgressSyncCount = 0;
@@ -10593,13 +10680,44 @@ firstRoundSandbox.WG.getAutoFirstRoundConfirmTimeout = readDashboardMethod(
 );
 firstRoundSandbox.WG.getAutoFirstRoundReleaseDelay = readDashboardMethod(
   "getAutoFirstRoundReleaseDelay",
-  "prepareAutoFirstRound",
+  "clearAutoFirstRoundAdvanceTimer",
   firstRoundSandbox,
 );
 firstRoundSandbox.WG.cancelAutoFirstRound = readDashboardMethod(
   "cancelAutoFirstRound",
   "getAutoFirstRoundReleaseDelay",
   firstRoundSandbox,
+);
+let scheduledFirstRoundReleaseTime = null;
+let clearedFirstRoundAdvanceTimers = 0;
+firstRoundSandbox.WG.scheduleAutoFirstRoundAdvance = (releaseTime) => {
+  scheduledFirstRoundReleaseTime = releaseTime;
+};
+firstRoundSandbox.WG.clearAutoFirstRoundAdvanceTimer = () => {
+  clearedFirstRoundAdvanceTimers += 1;
+};
+const firstRoundAdvanceTimers = [];
+const firstRoundAdvanceSandbox = {
+  WG: {
+    autoFirstRoundActive: true,
+    clearAutoFirstRoundAdvanceTimer() {},
+    processAutoFirstRound() {},
+  },
+  setTimeout(callback, delay) {
+    firstRoundAdvanceTimers.push({ callback, delay });
+    return firstRoundAdvanceTimers.length;
+  },
+};
+firstRoundAdvanceSandbox.WG.scheduleAutoFirstRoundAdvance = readDashboardMethod(
+  "scheduleAutoFirstRoundAdvance",
+  "prepareAutoFirstRound",
+  firstRoundAdvanceSandbox,
+);
+firstRoundAdvanceSandbox.WG.scheduleAutoFirstRoundAdvance(120);
+assert(
+  firstRoundAdvanceTimers.length === 1 &&
+    firstRoundAdvanceTimers[0].delay === 150,
+  "首轮成功回执后没有按准确释放时间加小幅安全余量续跑",
 );
 assert(
   firstRoundSandbox.WG.getAutoFirstRoundStorageKey() ===
@@ -10661,8 +10779,9 @@ assert(
     rtime: 1200,
   }) &&
     firstRoundSandbox.WG.autoFirstRoundIndex === 1 &&
-    firstRoundSandbox.WG.autoFirstRoundReadyAt > Date.now(),
-  "首轮未按技能成功协议推进或采用服务端释放时间",
+    firstRoundSandbox.WG.autoFirstRoundReadyAt > Date.now() &&
+    scheduledFirstRoundReleaseTime === 1200,
+  "首轮未按技能成功协议推进、采用服务端释放时间或精准调度下一招",
 );
 firstRoundSandbox.WG.autoFirstRoundReadyAt = Date.now() - 1;
 assert(firstRoundSandbox.WG.processAutoFirstRound(), "释放结束后未执行首轮第二招");
@@ -10887,7 +11006,8 @@ assert(
     !firstRoundSandbox.WG.autoFirstRoundActive &&
     firstRoundSandbox.WG.autoFirstRoundQueue.length === 0 &&
     firstRoundSandbox.WG.autoFirstRoundIndex === 0 &&
-    firstRoundSandbox.WG.autoFirstRoundPending === null,
+    firstRoundSandbox.WG.autoFirstRoundPending === null &&
+    clearedFirstRoundAdvanceTimers > 0,
   "关闭自动攻击后未同步取消叫杀第一轮出招",
 );
 for (const firstRoundDragStyleContract of [

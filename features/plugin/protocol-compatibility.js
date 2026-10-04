@@ -53,7 +53,8 @@
       // This hook is installed before upstream GI hooks. It mutates only the
       // parsed automation-side event; the game client still receives raw data.
       const decodeHook = WG.add_hook("dialog", function (event) {
-        WG.deserializePackData(event);
+        if (event.dialog === "pack" || event.dialog === "list")
+          WG.deserializePackData(event);
       });
 
       function updateDashboardFromEvent(event) {

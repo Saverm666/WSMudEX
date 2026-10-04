@@ -72,11 +72,26 @@
     return Boolean(describePopupDetailCommand(command));
   }
 
+  function matchesSkillDetailDialog(pending, data) {
+    if (data.dialog == pending.expectedDialog) return true;
+    return pending.expectedDialog == "master" && data.dialog == "skills";
+  }
+
+  function resolveSkillDetailOwnerKind(pending, data) {
+    if (
+      (pending && pending.expectedDialog == "master") ||
+      (data && data.dialog == "master")
+    ) {
+      return "master";
+    }
+    return "skills";
+  }
+
   function matchesDetailPopupData(pending, data) {
     if (!pending || !data) return false;
     if (pending.kind == "skill") {
       return (
-        data.dialog == pending.expectedDialog &&
+        matchesSkillDetailDialog(pending, data) &&
         data.id != null &&
         String(data.id) == String(pending.id) &&
         typeof data.desc == "string" &&
@@ -163,6 +178,7 @@
     describePopupDetailCommand: describePopupDetailCommand,
     isPopupDetailCommand: isPopupDetailCommand,
     matchesDetailPopupData: matchesDetailPopupData,
+    resolveSkillDetailOwnerKind: resolveSkillDetailOwnerKind,
     classifyDetailText: classifyDetailText,
     isDialogPanelPayload: isDialogPanelPayload,
     textDetailTimeout: 2500,

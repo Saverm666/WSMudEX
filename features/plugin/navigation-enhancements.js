@@ -162,6 +162,45 @@
           ? WG.runAfterBuiltinActionLoadout("master", run)
           : run();
       },
+      showPotentialWorkMessage: function (message) {
+        if (typeof global.ReceiveMessage === "function")
+          return global.ReceiveMessage(message);
+        messageAppend(message, 0, 1);
+      },
+      beginPotentialWorkAt: async function (target, command, workId) {
+        await WG.go(target);
+        var matches = function (name) {
+          name = String(name || "").replace(/<[^>]*>/g, "").trim();
+          return name === target || name === target.split("-").pop();
+        };
+        var arrived = matches(G.room_name);
+        if (!arrived) {
+          arrived = await new Promise(function (resolve) {
+            var hook, timer;
+            var finish = function (result) {
+              clearTimeout(timer);
+              WG.remove_hook(hook);
+              if (G.potentialWorkArrivalCancel === cancel)
+                G.potentialWorkArrivalCancel = void 0;
+              resolve(result);
+            };
+            var cancel = function () { finish(null); };
+            G.potentialWorkArrivalCancel = cancel;
+            hook = WG.add_hook("room", function (event) {
+              if (matches(event.name)) finish(true);
+            });
+            timer = setTimeout(function () { finish(false); }, 8000);
+          });
+        }
+        if (arrived === null) return;
+        if (!arrived || !G.connected || !WG.online) {
+          WG.showPotentialWorkMessage("<hio>智能挂机</hio>未能到达" + target + "，未开始" +
+            ({ mining: "挖矿", herbalism: "采药", fishing: "钓鱼" })[workId]);
+          return;
+        }
+        WG.Send(command);
+        WG.schedulePotentialWorkAutoCheck(workId);
+      },
       parsePotentialWorkBonuses: function (items) {
         var bonuses = { mining: 0, fishing: 0, herbalism: 0 },
           definitions = [
@@ -254,12 +293,10 @@
                 : null;
             if (
               currentWork &&
-              (ranked[0].id == currentWorkId ||
-                (ranked[0].bonus > 0 &&
-                  currentWork.bonus == ranked[0].bonus))
+              currentWork.bonus >= ranked[0].bonus
             ) {
               quietWhenUnchanged ||
-                messageAppend(
+                WG.showPotentialWorkMessage(
                   "<hio>智能挂机</hio>当前" +
                     currentWork.name +
                     "已是潜能收益最高项",
@@ -296,13 +333,10 @@
         var bonusText = work.bonus
           ? "（活动额外 +" + work.bonus + " 潜能/10秒）"
           : "（当前无挂机潜能活动加成）";
-        messageAppend("<hio>智能挂机</hio>选择" + work.name + bonusText);
+        WG.showPotentialWorkMessage("<hio>智能挂机</hio>选择" + work.name + bonusText);
         if (work.id == "herbalism") {
           WG.Send("stopstate");
-          return Promise.resolve(WG.go("扬州城-药林")).then(function () {
-            WG.Send("cai");
-            WG.schedulePotentialWorkAutoCheck("herbalism");
-          });
+          return WG.beginPotentialWorkAt("扬州城-药林", "cai", "herbalism");
         }
         if (work.id == "fishing") {
           WG.startFishingPotentialWork(fallbacks);
@@ -319,7 +353,7 @@
             finished = true;
             clearTimeout(timer);
             hook != null && WG.remove_hook(hook);
-            reason && messageAppend("<hio>智能挂机</hio>" + reason);
+            reason && WG.showPotentialWorkMessage("<hio>智能挂机</hio>" + reason);
             WG.startPotentialWork(
               fallbacks && fallbacks.length
                 ? fallbacks[0]
@@ -352,10 +386,7 @@
           WG.Send("stopstate");
           !equippedRod && WG.Send("eq " + rod.id);
           setTimeout(function () {
-            Promise.resolve(WG.go("扬州城-江边")).then(function () {
-              WG.Send("diao");
-              WG.schedulePotentialWorkAutoCheck("fishing");
-            });
+            WG.beginPotentialWorkAt("扬州城-江边", "diao", "fishing");
           }, equippedRod ? 0 : 500);
         });
         WG.suppressNextResponse(
@@ -374,6 +405,7 @@
         WG.Send("pack");
       },
       stopPotentialWorkAutoCheck: function () {
+        G.potentialWorkArrivalCancel && G.potentialWorkArrivalCancel();
         G.potentialWorkSelectionCancel &&
           G.potentialWorkSelectionCancel();
         G.potentialWorkAutoCheckTimer &&
@@ -390,8 +422,6 @@
           if (
             !G.connected ||
             !WG.online ||
-            typeof Setting == "undefined" ||
-            !Setting.auto_work ||
             !G.potentialWorkCurrentId
           )
             return WG.stopPotentialWorkAutoCheck();
@@ -400,11 +430,7 @@
         }, 5000);
       },
       handlePotentialWorkState: function (event) {
-        if (
-          !event ||
-          typeof Setting == "undefined" ||
-          !Setting.auto_work
-        )
+        if (!event)
           return WG.stopPotentialWorkAutoCheck();
         var state = String(event.state || "").replace(/<[^>]*>/g, ""),
           currentWorkId = state.indexOf("挖矿") >= 0
@@ -447,10 +473,7 @@
                       return (
                         WG.Send("eq " + s.id),
                         await WG.sleep(2e3),
-                        await WG.go("扬州城-矿山"),
-                        WG.Send("wa"),
-                        skipPotentialSelection &&
-                          WG.schedulePotentialWorkAutoCheck("mining"),
+                        await WG.beginPotentialWorkAt("扬州城-矿山", "wa", "mining"),
                         void WG.zdwk("remove", !1)
                       );
                   } else if (s.items) {
@@ -460,10 +483,7 @@
                     )
                       return (
                         await WG.sleep(1e3),
-                        await WG.go("扬州城-矿山"),
-                        WG.Send("wa"),
-                        skipPotentialSelection &&
-                          WG.schedulePotentialWorkAutoCheck("mining"),
+                        await WG.beginPotentialWorkAt("扬州城-矿山", "wa", "mining"),
                         void WG.zdwk("remove", !1)
                       );
                     for (let e = 0; e < s.items.length; e++) {
@@ -481,10 +501,7 @@
                       return (
                         WG.Send("eq " + t),
                         await WG.sleep(2e3),
-                        await WG.go("扬州城-矿山"),
-                        WG.Send("wa"),
-                        skipPotentialSelection &&
-                          WG.schedulePotentialWorkAutoCheck("mining"),
+                        await WG.beginPotentialWorkAt("扬州城-矿山", "wa", "mining"),
                         void WG.zdwk("remove", !1)
                       );
                     (await WG.go("扬州城-打铁铺"), WG.Send("look 1"));
