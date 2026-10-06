@@ -167,39 +167,70 @@
           return global.ReceiveMessage(message);
         messageAppend(message, 0, 1);
       },
-      beginPotentialWorkAt: async function (target, command, workId) {
-        await WG.go(target);
+      beginPotentialWorkAt: async function (target, command, workId, stopFirst) {
+        WG.stopPotentialWorkAutoCheck();
+        var cancelled = false, finishStage;
+        var cancel = function () {
+          cancelled = true;
+          finishStage && finishStage(null);
+        };
+        G.potentialWorkArrivalCancel = cancel;
         var matches = function (name) {
           name = String(name || "").replace(/<[^>]*>/g, "").trim();
           return name === target || name === target.split("-").pop();
         };
-        var arrived = matches(G.room_name);
-        if (!arrived) {
-          arrived = await new Promise(function (resolve) {
-            var hook, timer;
+        var waitForStage = function (stop) {
+          return new Promise(function (resolve) {
+            var hook, timer, finished = false;
             var finish = function (result) {
+              if (finished) return;
+              finished = true;
               clearTimeout(timer);
-              WG.remove_hook(hook);
-              if (G.potentialWorkArrivalCancel === cancel)
-                G.potentialWorkArrivalCancel = void 0;
+              hook != null && WG.remove_hook(hook);
+              if (G.potentialWorkStopAck === finish)
+                G.potentialWorkStopAck = void 0;
+              finishStage = void 0;
               resolve(result);
             };
-            var cancel = function () { finish(null); };
-            G.potentialWorkArrivalCancel = cancel;
-            hook = WG.add_hook("room", function (event) {
-              if (matches(event.name)) finish(true);
-            });
+            finishStage = finish;
             timer = setTimeout(function () { finish(false); }, 8000);
+            if (stop) {
+              G.potentialWorkStopAck = finish;
+              WG.Send("stopstate");
+            } else {
+              hook = WG.add_hook("room", function (event) {
+                if (matches(event.name)) finish(true);
+              });
+            }
           });
+        };
+        try {
+          var hasCurrentState = G.potentialWorkObservedState === void 0
+            ? $(".state-bar .title").length > 0
+            : G.potentialWorkObservedState;
+          if (stopFirst && hasCurrentState) {
+            var stopped = await waitForStage(true);
+            if (cancelled) return;
+            if (!stopped) {
+              WG.showPotentialWorkMessage("<hio>智能挂机</hio>停止当前动作未获确认，请重试");
+              return;
+            }
+          }
+          await WG.go(target);
+          if (cancelled) return;
+          var arrived = matches(G.room_name) || await waitForStage(false);
+          if (cancelled) return;
+          if (!arrived || !G.connected || !WG.online) {
+            WG.showPotentialWorkMessage("<hio>智能挂机</hio>未能到达" + target + "，未开始" +
+              ({ mining: "挖矿", herbalism: "采药", fishing: "钓鱼" })[workId]);
+            return;
+          }
+          WG.Send(command);
+          WG.schedulePotentialWorkAutoCheck(workId);
+        } finally {
+          if (G.potentialWorkArrivalCancel === cancel)
+            G.potentialWorkArrivalCancel = void 0;
         }
-        if (arrived === null) return;
-        if (!arrived || !G.connected || !WG.online) {
-          WG.showPotentialWorkMessage("<hio>智能挂机</hio>未能到达" + target + "，未开始" +
-            ({ mining: "挖矿", herbalism: "采药", fishing: "钓鱼" })[workId]);
-          return;
-        }
-        WG.Send(command);
-        WG.schedulePotentialWorkAutoCheck(workId);
       },
       parsePotentialWorkBonuses: function (items) {
         var bonuses = { mining: 0, fishing: 0, herbalism: 0 },
@@ -335,8 +366,7 @@
           : "（当前无挂机潜能活动加成）";
         WG.showPotentialWorkMessage("<hio>智能挂机</hio>选择" + work.name + bonusText);
         if (work.id == "herbalism") {
-          WG.Send("stopstate");
-          return WG.beginPotentialWorkAt("扬州城-药林", "cai", "herbalism");
+          return WG.beginPotentialWorkAt("扬州城-药林", "cai", "herbalism", true);
         }
         if (work.id == "fishing") {
           WG.startFishingPotentialWork(fallbacks);
@@ -432,6 +462,11 @@
       handlePotentialWorkState: function (event) {
         if (!event)
           return WG.stopPotentialWorkAutoCheck();
+        G.potentialWorkObservedState = !!event.state;
+        if (!event.state && G.potentialWorkStopAck) {
+          G.potentialWorkStopAck(true);
+          return true;
+        }
         var state = String(event.state || "").replace(/<[^>]*>/g, ""),
           currentWorkId = state.indexOf("挖矿") >= 0
             ? "mining"

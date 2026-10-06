@@ -486,7 +486,76 @@
       toggleSideChatPanel: function () {
         return WG.setSideChatPanelOpen(!WG.isSideChatPanelOpen());
       },
+      initChatReplyMenu: function () {
+        if (WG.chatReplyMenuInitialized) return;
+        WG.chatReplyMenuInitialized = true;
+        var menu = $('<div class="WG_chat_reply_menu" hidden><button type="button">回复</button></div>').appendTo(document.body),
+          quote = "";
+        function close() {
+          menu.prop("hidden", true);
+          quote = "";
+        }
+        menu.on("click", "button", function () {
+          var text = quote;
+          close();
+          if (!text) return;
+          var input;
+          if ($(".WG_side_chat_panel_host").length) {
+            if (!WG.isSideChatPanelOpen()) WG.setSideChatPanelOpen(true);
+            input = WG.ensureSideChatComposer().find(".WG_side_chat_input").first();
+          } else {
+            $(".chat-panel").removeClass("hide").show();
+            input = $(".sender-box").first();
+          }
+          if (!input.length) return;
+          var value = "回复“" + text + "”：";
+          input.val(value).trigger("input");
+          input[0].focus();
+          input[0].setSelectionRange(value.length, value.length);
+        });
+        document.addEventListener("contextmenu", function (event) {
+          var target = event.target.closest && event.target.closest(".channel .WG_chat_message, .channel pre");
+          if (!target) {
+            close();
+            return;
+          }
+          var text = target.textContent || "";
+          // Overlay clients can still render several messages in one pre.
+          if (!target.classList.contains("WG_chat_message")) {
+            var caret = document.caretRangeFromPoint && document.caretRangeFromPoint(event.clientX, event.clientY);
+            if (!caret || !target.contains(caret.startContainer)) return;
+            var prefix = document.createRange();
+            prefix.selectNodeContents(target);
+            prefix.setEnd(caret.startContainer, caret.startOffset);
+            var offset = prefix.toString().length;
+            var end = text.indexOf("\n", offset);
+            text = text.slice(text.lastIndexOf("\n", Math.max(0, offset - 1)) + 1, end < 0 ? text.length : end);
+          }
+          text = text.trim().replace(/^【[^】]*】\s*/, "").replace(/[\r\n]+/g, " ").trim();
+          if (!text) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          quote = text;
+          menu.prop("hidden", false);
+          var bounds = menu[0].getBoundingClientRect();
+          menu.css({
+            left: Math.max(4, Math.min(event.clientX, window.innerWidth - bounds.width - 4)),
+            top: Math.max(4, Math.min(event.clientY, window.innerHeight - bounds.height - 4)),
+          });
+        }, true);
+        document.addEventListener("pointerdown", function (event) {
+          if (!menu[0].contains(event.target)) close();
+        }, true);
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") close();
+        });
+        document.addEventListener("scroll", function (event) {
+          if (!menu[0].contains(event.target)) close();
+        }, true);
+        window.addEventListener("resize", close);
+      },
       initSideChatPanel: function () {
+        WG.initChatReplyMenu();
         $(".chat-panel")
           .addClass("WG_legacy_chat_panel")
           .attr("aria-hidden", "true");
@@ -591,11 +660,18 @@
               WG.Send("eqgroup " + equipmentGroup);
             }
           });
+        if (WG.equipmentPickerOutsidePointerDown) {
+          document.removeEventListener("pointerdown", WG.equipmentPickerOutsidePointerDown, true);
+        }
+        WG.equipmentPickerOutsidePointerDown = function (event) {
+          if (!$(".WG_equipment_picker").prop("hidden") &&
+              !$(event.target).closest(".WG_equipment_picker_dialog").length) {
+            WG.closeEquipmentPicker(false);
+          }
+        };
+        document.addEventListener("pointerdown", WG.equipmentPickerOutsidePointerDown, true);
         $(".WG_equipment_picker")
           .off("click.WG_equipment_picker")
-          .on("click.WG_equipment_picker", function (event) {
-            event.target === this && WG.closeEquipmentPicker();
-          })
           .on(
             "click.WG_equipment_picker",
             ".WG_equipment_picker_close",
@@ -834,7 +910,7 @@
         $(".WG_floating_panel").css("display", isOpen ? "flex" : "none");
         $(".WG_floating_toggle")
           .attr("aria-expanded", String(isOpen))
-          .text(isOpen ? "收起插件" : "打开插件");
+          .text("脚本");
         isOpen && WG.positionFloatingPanel();
       },
       showhideborad: function (event) {
@@ -842,9 +918,21 @@
           event && event.preventDefault();
           return;
         }
-        WG.setFloatingPanelOpen(!$(".WG_floating_panel").is(":visible"));
+        WG.setFloatingPanelOpen(event ? true : !$(".WG_floating_panel").is(":visible"));
       },
       floatingTogglePositionKey: "WG_floating_toggle_position",
+      floatingToggleLockedKey: "WG_floating_toggle_locked",
+      floatingPanelPositionKey: "WG_floating_panel_position",
+      floatingPanelSizeKey: "WG_floating_panel_size",
+      setFloatingToggleLocked: function (locked) {
+        WG.floatingToggleLocked = Boolean(locked);
+        window.localStorage.setItem(WG.floatingToggleLockedKey, String(WG.floatingToggleLocked));
+        $(".WG_floating_toggle")
+          .toggleClass("WG_position_locked", WG.floatingToggleLocked)
+          .attr("title", WG.floatingToggleLocked
+            ? "脚本（位置已固定，右键解锁）"
+            : "脚本（拖动移动，右键固定位置）");
+      },
       clampFloatingTogglePosition: function (left, top, button) {
         var margin = 8,
           width = button.outerWidth() || 0,
@@ -875,7 +963,6 @@
             WG.floatingTogglePositionKey,
             JSON.stringify(position),
           );
-        $(".WG_floating_panel").is(":visible") && WG.positionFloatingPanel();
       },
       restoreFloatingTogglePosition: function () {
         var savedPosition = window.localStorage.getItem(
@@ -896,41 +983,109 @@
         }
       },
       positionFloatingPanel: function () {
-        var button = $(".WG_floating_toggle")[0],
-          panel = $(".WG_floating_panel")[0];
-        if (!button || !panel) return;
-        var margin = 8,
-          gap = 10,
-          buttonRect = button.getBoundingClientRect(),
-          panelWidth = panel.offsetWidth,
-          panelHeight = panel.offsetHeight,
-          left = buttonRect.right - panelWidth,
-          top = buttonRect.top - panelHeight - gap;
-        top < margin && (top = buttonRect.bottom + gap);
-        left = Math.max(
-          margin,
-          Math.min(left, window.innerWidth - panelWidth - margin),
-        );
-        top = Math.max(
-          margin,
-          Math.min(top, window.innerHeight - panelHeight - margin),
-        );
-        $(panel).css({
-          left: left + "px",
-          top: top + "px",
+        var panel = $(".WG_floating_panel");
+        if (!panel.is(":visible")) return;
+        if (!WG.floatingPanelPosition) {
+          try {
+            var saved = JSON.parse(window.localStorage.getItem(WG.floatingPanelPositionKey));
+            if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+              WG.floatingPanelPosition = saved;
+            }
+          } catch (error) {
+            window.localStorage.removeItem(WG.floatingPanelPositionKey);
+          }
+        }
+        var position = WG.floatingPanelPosition || {
+          left: (window.innerWidth - panel.outerWidth()) / 2,
+          top: (window.innerHeight - panel.outerHeight()) / 2,
+        };
+        WG.applyFloatingPanelPosition(position.left, position.top, false);
+      },
+      applyFloatingPanelPosition: function (left, top, persist) {
+        var panel = $(".WG_floating_panel");
+        if (!panel.length) return;
+        var position = WG.clampFloatingTogglePosition(left, top, panel);
+        WG.floatingPanelPosition = position;
+        panel.css({
+          left: position.left + "px",
+          top: position.top + "px",
           right: "auto",
           bottom: "auto",
         });
+        persist && window.localStorage.setItem(
+          WG.floatingPanelPositionKey, JSON.stringify(position),
+        );
+      },
+      initFloatingPanelDrag: function () {
+        var header = $(".WG_floating_header"), dragState = null;
+        var panel = $(".WG_floating_panel");
+        try {
+          var savedSize = JSON.parse(window.localStorage.getItem(WG.floatingPanelSizeKey));
+          if (savedSize && Number.isFinite(savedSize.width) && Number.isFinite(savedSize.height)) {
+            panel.css({ width: savedSize.width + "px", height: savedSize.height + "px" });
+          }
+        } catch (error) {
+          window.localStorage.removeItem(WG.floatingPanelSizeKey);
+        }
+        WG.floatingPanelResizeObserver && WG.floatingPanelResizeObserver.disconnect();
+        if (panel.length && typeof ResizeObserver !== "undefined") {
+          WG.floatingPanelResizeObserver = new ResizeObserver(function () {
+            if (!panel.is(":visible")) return;
+            // Native resize writes inline dimensions; automatic content growth does not.
+            if (panel[0].style.width && panel[0].style.height) {
+              window.localStorage.setItem(WG.floatingPanelSizeKey, JSON.stringify({
+                width: panel.outerWidth(), height: panel.outerHeight(),
+              }));
+            }
+            WG.positionFloatingPanel();
+          });
+          WG.floatingPanelResizeObserver.observe(panel[0]);
+        }
+        header.off(".WG_floating_panel_drag")
+          .on("pointerdown.WG_floating_panel_drag", function (event) {
+            var pointerEvent = event.originalEvent;
+            if (pointerEvent.button !== 0 || $(event.target).closest("button").length) return;
+            var rect = $(".WG_floating_panel")[0].getBoundingClientRect();
+            dragState = { pointerId: pointerEvent.pointerId, startX: pointerEvent.clientX,
+              startY: pointerEvent.clientY, left: rect.left, top: rect.top };
+            this.setPointerCapture && this.setPointerCapture(pointerEvent.pointerId);
+            header.addClass("WG_dragging");
+            event.preventDefault();
+          })
+          .on("pointermove.WG_floating_panel_drag", function (event) {
+            var pointerEvent = event.originalEvent;
+            if (!dragState || pointerEvent.pointerId !== dragState.pointerId) return;
+            WG.applyFloatingPanelPosition(
+              dragState.left + pointerEvent.clientX - dragState.startX,
+              dragState.top + pointerEvent.clientY - dragState.startY, false,
+            );
+            event.preventDefault();
+          })
+          .on("pointerup.WG_floating_panel_drag pointercancel.WG_floating_panel_drag", function (event) {
+            if (!dragState || event.originalEvent.pointerId !== dragState.pointerId) return;
+            header.removeClass("WG_dragging");
+            var rect = $(".WG_floating_panel")[0].getBoundingClientRect();
+            WG.applyFloatingPanelPosition(rect.left, rect.top, true);
+            dragState = null;
+          });
       },
       initFloatingToggleDrag: function () {
         var button = $(".WG_floating_toggle"),
           dragState = null;
         if (!button.length) return;
         WG.restoreFloatingTogglePosition();
+        WG.setFloatingToggleLocked(window.localStorage.getItem(WG.floatingToggleLockedKey) === "true");
+        WG.initFloatingPanelDrag();
         button
           .off(".WG_floating_drag")
+          .on("contextmenu.WG_floating_drag", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            WG.setFloatingToggleLocked(!WG.floatingToggleLocked);
+          })
           .on("pointerdown.WG_floating_drag", function (event) {
             var pointerEvent = event.originalEvent;
+            if (WG.floatingToggleLocked) return;
             if (pointerEvent.button != null && pointerEvent.button !== 0) return;
             var rect = this.getBoundingClientRect();
             dragState = {
@@ -981,6 +1136,7 @@
           .on("resize.WG_floating_drag", function () {
             var rect = button[0].getBoundingClientRect();
             WG.applyFloatingTogglePosition(rect.left, rect.top, true);
+            WG.positionFloatingPanel();
           });
       },
     });

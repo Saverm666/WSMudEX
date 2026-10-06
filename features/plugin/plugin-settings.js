@@ -87,7 +87,7 @@
             </footer>
           </section>
           <footer class="WG_plugin_settings_footer">
-            <button class="WG_plugin_settings_button WG_plugin_settings_advanced" type="button">更多插件功能</button>
+            <button class="WG_plugin_settings_button WG_plugin_settings_advanced" type="button">旧脚本设置</button>
             <button class="WG_plugin_settings_button WG_plugin_settings_reset" type="button">恢复默认</button>
             <button class="WG_plugin_settings_button WG_plugin_settings_done" type="button">完成</button>
           </footer>
@@ -102,9 +102,14 @@
       pluginFeatureFlagsKey: "WG_plugin_feature_flags_v1",
       pluginFeatureDefinitions: [
         {
+          id: "autoFirstRoundOrder",
+          name: "首轮出招顺序",
+          desc: "启用时按保存顺序执行首轮；关闭后按冷却自动出招，保留原有顺序，可随时切换。",
+        },
+        {
           id: "autoGreetOnOpen",
-          name: "每次打开自动尝试请安",
-          desc: "每次打开游戏或切换角色时，自动发送一次门派首席请安。",
+          name: "未请安时自动请安",
+          desc: "未请安才执行；确认已请安后暂停检查，直到次日北京时间凌晨 5 点。",
         },
         {
           id: "horizontalMenu",
@@ -162,6 +167,18 @@
           JSON.stringify(flags),
         );
         WG.applyPluginFeatureFlags();
+        if (feature === "autoGreetOnOpen") {
+          if (enabled && typeof WG.startAutoGreetCheck === "function") WG.startAutoGreetCheck();
+          if (!enabled && typeof WG.stopAutoGreetCheck === "function") WG.stopAutoGreetCheck();
+        }
+        if (feature === "autoFirstRoundOrder") {
+          if (typeof WG.cancelAutoFirstRound === "function") WG.cancelAutoFirstRound();
+          WG.autoFirstRoundPrepared = false;
+          if (enabled && typeof WG.prepareAutoFirstRound === "function") {
+            WG.prepareAutoFirstRound();
+            WG.processAutoFirstRound();
+          }
+        }
       },
       applyPluginFeatureFlags: function () {
         var flags = WG.getPluginFeatureFlags(),

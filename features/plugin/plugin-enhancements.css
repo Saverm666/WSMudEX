@@ -1,4 +1,85 @@
 /* Styles owned by migrated plugin enhancement modules. */
+#raidToolbar {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+#raidToolbar > .raidToolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    margin: 5px 0;
+    overflow-x: auto;
+}
+#raidToolbar .raid-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+#raidToolbar .hideRaidToolbar {
+    width: 32px;
+    min-width: 32px;
+    min-height: 30px;
+    padding: 0;
+    font: inherit;
+    line-height: 28px;
+}
+#raidToolbar.WG_raid_toolbar_collapsed .raid-item:not(.hideRaidToolbar) {
+    display: none;
+}
+.WG_floating_panel #raidToolbar.WG_raid_toolbar_collapsed > .raidToolbar {
+    height: 0;
+    margin: 0;
+    overflow: visible;
+}
+.WG_floating_panel #raidToolbar.WG_raid_toolbar_collapsed .hideRaidToolbar {
+    position: absolute;
+    top: 4px;
+    right: 48px;
+}
+.WG_floating_panel:has(#raidToolbar.WG_raid_toolbar_collapsed) .WG_floating_header > span {
+    padding-right: 38px;
+}
+.item-commands > .WG_trigger_card {
+    display: inline-flex;
+    align-items: center;
+    width: 180px;
+    max-width: calc(100% - 1em);
+    min-height: 36px;
+    padding: 3px;
+    gap: 4px;
+    border-radius: 0.5em;
+    vertical-align: middle;
+}
+.WG_trigger_card > button {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 30px;
+    cursor: pointer;
+}
+.WG_trigger_card > .WG_trigger_edit {
+    flex: 0 0 30px;
+    background: rgba(255, 255, 255, 0.31);
+}
+.WG_trigger_card > .WG_trigger_toggle {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.WG_trigger_card > button:focus-visible {
+    outline: 2px solid #7284ff;
+    outline-offset: -2px;
+}
+.content-message {
+    scroll-behavior: auto !important;
+}
 .room-commands > .act-item.WG_native_auto_active {
     color: black !important;
     background-color: gray !important;
@@ -153,6 +234,35 @@ html.WG_feature_equipmentPicker_off .WG_equipment_item {
 }
 .WG_side_chat_view[hidden] {
     display: none;
+}
+.WG_chat_message {
+    display: block;
+}
+.WG_chat_reply_menu[hidden] {
+    display: none;
+}
+.WG_chat_reply_menu {
+    position: fixed;
+    z-index: 2147483603;
+    padding: 2px;
+    border: 1px solid #666;
+    border-radius: 3px;
+    background: #111;
+    color: #c0c0c0;
+}
+.WG_chat_reply_menu > button {
+    display: block;
+    padding: 5px 18px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.WG_chat_reply_menu > button:hover,
+.WG_chat_reply_menu > button:focus-visible {
+    background: #333;
+    color: #fff;
 }
 .WG_side_chat_view {
     display: flex;
@@ -913,20 +1023,29 @@ body.WG_resizing_rails * {
 }
 .WG_equipment_list {
     display: grid;
-    gap: 0.25em;
-    margin-top: 0.5em;
-    padding-top: 0.5em;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+    margin-top: 4px;
+    padding-top: 4px;
     border-top: 1px solid #20252b;
+    font-size: min(1em, 14px);
+}
+.WG_equipment_list::before {
+    content: none;
 }
 .WG_equipment_item {
+    grid-column: 1 / -1;
     position: relative;
     display: flex;
     align-items: center;
     min-width: 0;
     overflow: hidden;
-    border-left: 2px solid gray;
-    border-radius: 4px;
-    background-color: #111;
+    height: 24px;
+    min-height: 24px;
+    line-height: 22px;
+    border-left: 2px solid var(--border-color, #3c4248);
+    border-radius: 3px;
+    background-color: #0e1012;
     cursor: pointer;
     transition: border-color 120ms ease-out, background 120ms ease-out;
 }
@@ -947,11 +1066,15 @@ body.WG_resizing_rails * {
     color: #aab0b5;
 }
 .WG_equipment_slot {
-    flex: 0 0 3em;
-    height: 1.875em;
-    color: gray;
-    background-color: #333;
-    line-height: 1.875em;
+    flex: 0 0 2.6em;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #333;
+    color: #868d95;
+    font-size: 12px;
+    line-height: 22px;
     text-align: center;
 }
 .WG_equipment_name {
@@ -963,7 +1086,24 @@ body.WG_resizing_rails * {
     white-space: nowrap;
 }
 .WG_equipment_item.is-empty .WG_equipment_name {
-    color: #3f464d;
+    color: gray;
+    text-align: right;
+    padding-right: 7px;
+}
+.WG_equipment_item.is-empty {
+    grid-column: auto;
+    padding-left: 0;
+    background: transparent;
+    border: 0;
+    border-left: 2px solid #252525;
+}
+.WG_equipment_item.is-empty::after {
+    content: none;
+}
+.WG_equipment_item.is-selected {
+    outline: 1px solid gray;
+    outline-offset: -1px;
+    background: #222;
 }
 .WG_equipment_picker[hidden] {
     display: none;
@@ -972,167 +1112,87 @@ body.WG_resizing_rails * {
     position: fixed;
     inset: 0;
     z-index: 2147483602;
-    background: rgba(0, 0, 0, 0.16);
+    background: transparent;
+    pointer-events: none;
     font-family: inherit;
     font-weight: inherit;
     line-height: inherit;
 }
 .WG_equipment_picker_dialog {
+    pointer-events: auto;
     position: fixed;
     top: 0;
     left: 0;
     display: flex;
     flex-direction: column;
-    width: min(30em, calc(100vw - 2em));
-    max-height: min(72vh, 38em);
+    width: min(320px, calc(100vw - 16px));
+    max-height: min(72vh, 520px);
     overflow: hidden;
     border: 1px solid #555;
-    border-radius: 0.3em;
-    color: #c0c0c0;
-    background: #0b0b0b;
-    box-shadow: 0 1em 3em rgba(0, 0, 0, 0.72);
-}
-.WG_equipment_picker:not([hidden])[data-placement="right"] .WG_equipment_picker_dialog {
-    animation: WG_equipment_picker_from_right 120ms ease-out;
-    transform-origin: left center;
-}
-.WG_equipment_picker:not([hidden])[data-placement="left"] .WG_equipment_picker_dialog {
-    animation: WG_equipment_picker_from_left 120ms ease-out;
-    transform-origin: right center;
-}
-.WG_equipment_picker:not([hidden])[data-placement="sheet"] .WG_equipment_picker_dialog {
-    animation: WG_equipment_picker_from_bottom 140ms ease-out;
-    transform-origin: center bottom;
-}
-@keyframes WG_equipment_picker_from_right {
-    from { opacity: 0; transform: translateX(-0.5em) scale(0.985); }
-    to { opacity: 1; transform: translateX(0) scale(1); }
-}
-@keyframes WG_equipment_picker_from_left {
-    from { opacity: 0; transform: translateX(0.5em) scale(0.985); }
-    to { opacity: 1; transform: translateX(0) scale(1); }
-}
-@keyframes WG_equipment_picker_from_bottom {
-    from { opacity: 0; transform: translateY(0.6em); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.WG_equipment_picker_header {
-    display: flex;
-    align-items: center;
-    min-height: 2.75em;
-    padding-left: 0.8em;
-    border-bottom: 1px solid #343434;
-}
-.WG_equipment_picker_title {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    color: #d2d2d2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.WG_equipment_picker_close {
-    align-self: stretch;
-    width: 2.75em;
-    padding: 0;
-    border: 0;
-    border-left: 1px solid #343434;
-    color: gray;
-    background: transparent;
-    font: inherit;
-    cursor: pointer;
-}
-.WG_equipment_picker_close:hover,
-.WG_equipment_picker_close:focus-visible {
-    color: white;
-    outline: none;
-    background: #222;
-}
-.WG_equipment_picker_current {
-    padding: 0.65em;
-    border-bottom: 1px solid #202020;
+    border-radius: 4px;
+    color: silver;
+    background: #000;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
 }
 .WG_equipment_picker_list {
-    display: grid;
-    gap: 0.4em;
+    min-height: 0;
     overflow-y: auto;
-    padding: 0.65em;
+    padding: 0;
 }
 .WG_equipment_picker_choice {
     display: flex;
     align-items: center;
-    gap: 0.6em;
+    gap: 8px;
     width: 100%;
-    min-height: 2.75em;
-    padding: 0.45em 0.65em;
-    border: 1px solid #3b3b3b;
-    border-left: 3px solid var(--border-color, gray);
-    border-radius: 0.25em;
-    color: #c0c0c0;
-    background: #111;
+    min-height: 34px;
+    margin: 0;
+    padding: 5px 10px;
+    border: 0;
+    border-bottom: 1px solid #222;
+    border-radius: 0;
+    background: transparent;
+    color: silver;
     font: inherit;
+    line-height: 22px;
     text-align: left;
     cursor: pointer;
 }
+.WG_equipment_picker_choice:last-child {
+    border-bottom: 0;
+}
 .WG_equipment_picker_choice:hover,
 .WG_equipment_picker_choice:focus-visible {
-    border-color: #777;
-    border-left-color: var(--border-color, #858a8f);
-    outline: none;
-    background: #191919;
-}
-.WG_equipment_picker_choice.is-current,
-.WG_equipment_picker_choice.is-current:hover {
-    border-color: #3b3b3b;
-    border-left-color: var(--border-color, gray);
-    background: #111;
-    cursor: default;
+    background: #222;
+    outline: 1px solid #555;
+    outline-offset: -1px;
 }
 .WG_equipment_picker_name {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--border-color, #c0c0c0);
+    color: var(--border-color, silver);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.WG_equipment_picker_meta {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 0.4em;
-    color: #737373;
-    font-size: 0.72em;
-    white-space: nowrap;
-}
-.WG_equipment_picker_quick {
-    padding: 0.12em 0.35em;
-    border: 1px solid #62686e;
-    border-radius: 999px;
-    color: #b8bec4;
-    background: #1c2024;
-}
-.WG_equipment_picker_current_badge {
-    color: #858c94;
+.WG_equipment_picker_choice:disabled {
+    cursor: wait;
+    opacity: 0.65;
 }
 .WG_equipment_picker_empty {
-    padding: 1.6em 0.8em;
-    color: #666;
+    padding: 14px 10px;
+    color: gray;
     text-align: center;
 }
-@media (max-width: 720px), (max-height: 520px) {
-    .WG_equipment_picker {
-        background: rgba(0, 0, 0, 0.52);
-    }
-    .WG_equipment_picker_dialog {
-        width: calc(100vw - 1em);
-        max-height: min(82dvh, 38em);
-    }
+.WG_equipment_picker_status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
-@media (prefers-reduced-motion: reduce) {
-    .WG_equipment_picker:not([hidden]) .WG_equipment_picker_dialog {
-        animation: none;
-    }
+.WG_equipment_picker_status[hidden] {
+    display: none;
 }
 .WG_map_modal[hidden] {
     display: none !important;
@@ -1967,6 +2027,24 @@ body.WG_map_modal_open {
 .WG_plugin_settings_advanced {
     margin-right: auto;
 }
+.WG_legacy_settings_entry {
+    padding: 8px;
+    border-bottom: 1px solid #343434;
+}
+.WG_legacy_settings_button {
+    padding: 4px 12px;
+    border: 1px solid gray;
+    border-radius: 3px;
+    background: #111;
+    color: silver;
+    font: inherit;
+    cursor: pointer;
+}
+.WG_legacy_settings_button:hover,
+.WG_legacy_settings_button:focus-visible {
+    background: #333;
+    color: white;
+}
 @media (max-width: 760px) {
     .WG_plugin_settings {
         padding: 0.5em;
@@ -2225,6 +2303,9 @@ body.WG_map_modal_open {
 .WG_floating_toggle.WG_dragging {
     cursor: grabbing;
 }
+.WG_floating_toggle.WG_position_locked {
+    cursor: pointer;
+}
 .WG_floating_toggle:hover {
     border-color: #9aa0a6;
     background: #292c33;
@@ -2237,13 +2318,28 @@ body.WG_map_modal_open {
     display: none;
     flex-direction: column;
     width: min(760px, calc(100vw - 36px));
-    max-height: min(70vh, 560px);
+    height: min(560px, 70vh);
+    min-width: min(260px, calc(100vw - 16px));
+    min-height: min(240px, calc(100vh - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    resize: both;
     padding: 0 12px 10px;
     overflow: hidden;
     border: 1px solid #4b5058;
     border-radius: 12px;
     background: rgba(5, 7, 10, 0.97);
     box-shadow: 0 16px 44px rgba(0, 0, 0, 0.62);
+    box-sizing: border-box;
+}
+.WG_floating_panel > .WG_log {
+    min-height: 60px;
+    max-height: none;
+}
+.WG_floating_panel > .WG_log,
+.WG_floating_panel > .WG_button {
+    width: 100%;
+    min-width: 0;
     box-sizing: border-box;
 }
 .WG_floating_header {
@@ -2255,6 +2351,11 @@ body.WG_map_modal_open {
     color: #c9cdd3;
     font: 600 14px/38px "Microsoft YaHei", sans-serif;
     user-select: none;
+    cursor: grab;
+    touch-action: none;
+}
+.WG_floating_header.WG_dragging {
+    cursor: grabbing;
 }
 .WG_floating_close {
     width: 30px;
@@ -2295,3 +2396,32 @@ white-space: pre-line;
    padding: 10px 0 0;
 }
 .WG_button > .zdy-item:active {background-color: gray;color:black;}
+.task-daily-status > .flex-1 {
+  min-width: 0;
+}
+.task-daily-grid {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: 1em;
+}
+.task-daily-grid[data-columns="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.task-daily-grid > span {
+  width: max-content;
+  max-width: 100%;
+  white-space: normal;
+}
+.item-commands.WG_dungeon_choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr));
+  gap: 8px 12px;
+}
+.WG_dungeon_choices > .WG_dungeon_choice {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 8px;
+  white-space: nowrap;
+}

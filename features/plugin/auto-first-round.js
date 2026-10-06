@@ -315,6 +315,8 @@
         }, delay);
       },
       prepareAutoFirstRound: function () {
+        if (typeof WG.isPluginFeatureEnabled === "function" &&
+          !WG.isPluginFeatureEnabled("autoFirstRoundOrder")) return;
         if (!G.auto_preform || !G.in_fight || WG.autoFirstRoundPrepared) return;
         WG.autoFirstRoundPrepared = true;
         WG.autoFirstRoundQueue = WG.loadAutoFirstRoundConfig().slice();
@@ -343,7 +345,8 @@
         return Math.max(1200, WG.getAutoFirstRoundReleaseDelay() + 500);
       },
       processAutoFirstRound: function () {
-        if (!G.auto_preform) {
+        if (!G.auto_preform || (typeof WG.isPluginFeatureEnabled === "function" &&
+          !WG.isPluginFeatureEnabled("autoFirstRoundOrder"))) {
           WG.cancelAutoFirstRound();
           return false;
         }

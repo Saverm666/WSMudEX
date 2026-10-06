@@ -38,10 +38,9 @@
         (TriggerUI._appendHtml(
           "🍟 <hio>触发器</hio>",
           `
-            <style>.breakText {word-break:keep-all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}</style>
-            <span class="zdy-item" style="width:120px; height:30px; line-height:30px; border-radius:0.5em; " v-for="t in triggers" :style="activeStyle(t)">
-                <div style="width: 30px; float: left; background-color: rgba(255, 255, 255, 0.31); border-radius: 4px;" v-on:click="editTrigger(t)">⚙</div>
-                <div class="breakText" style="width: 85px; float: right;" v-on:click="switchStatus(t)">{{ t.name }}</div>
+            <span class="zdy-item WG_trigger_card" v-for="t in triggers" :style="activeStyle(t)">
+                <button type="button" class="WG_trigger_edit" :aria-label="'编辑触发器：' + t.name" v-on:click="editTrigger(t)">⚙</button>
+                <button type="button" class="WG_trigger_toggle" :aria-pressed="t.active() ? 'true' : 'false'" :aria-label="(t.active() ? '停用触发器：' : '启用触发器：') + t.name" :title="t.name" v-on:click="switchStatus(t)">{{ t.name }}</button>
             </span>
             `,
           "<span v-on:click='createTrigger()'><wht>新建</wht></span>",

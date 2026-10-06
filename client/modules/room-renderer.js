@@ -303,6 +303,18 @@
       return null;
     }
 
+    function killRoomNpc(event) {
+      const currentProcess = process();
+      const itemId = $(this).attr("itemid");
+      const item = queryRoomItem(itemId);
+      if (!item || item.p || item.me || String(itemId) === String(currentProcess.player)) return;
+      const alive = item.hp != null ? Number(item.hp) > 0 : Number(item.max_hp) > 0;
+      if (!alive) return;
+      event.preventDefault();
+      event.stopPropagation();
+      sendCommand("kill " + item.id);
+    }
+
     function resetForSession() {
       const currentProcess = process();
       const currentCombat = combat();
@@ -339,6 +351,7 @@
       before_click_exits,
       click_exits,
       queryRoomItem,
+      killRoomNpc,
       resetRoomRendererSession: resetForSession,
     };
   });

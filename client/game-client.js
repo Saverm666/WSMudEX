@@ -35,6 +35,7 @@ $(function () {
   $(".room-commands").on("wheel", Combat.Scroll);
   $(".sender-box").on("keyup", OnSendBoxKeyDown);
   $(".room_items").on("click", ".room-item", Process.selectItem);
+  $(".room_items").on("contextmenu.WSMudNPC", ".room-item", Process.killRoomNpc);
   $(".bottom-bar").on(
     "click",
     ".tool-item,.state-bar,.item-command",
@@ -4497,6 +4498,7 @@ Dialog.setting = {
     ["<yel>高级</yel>", "custom"],
     ["快捷键", "keys"],
     ["扩展", "extend"],
+    ["脚本", "script"],
   ],
   selectitem: null,
   init: function () {
@@ -4513,6 +4515,23 @@ Dialog.setting = {
     this.extendElement = $(".dialog-extend");
     this.keysElement = $(".dialog-skeys");
     this.customElement = $(".dialog-custom");
+    this.scriptElement = $("<div>", { class: "dialog-script" });
+    for (var settingsPage of [this.settingElement, this.customElement]) {
+      var legacyEntry = $("<div>", { class: "WG_legacy_settings_entry" }).prependTo(settingsPage);
+      $("<button>", {
+        type: "button",
+        class: "WG_legacy_settings_button",
+        text: "旧脚本设置",
+      }).appendTo(legacyEntry);
+    }
+    $(document).off("click.WG_legacy_settings_entry", ".WG_legacy_settings_button")
+      .on("click.WG_legacy_settings_entry", ".WG_legacy_settings_button", function () {
+        if (unsafeWindow.WG && typeof unsafeWindow.WG.setting === "function") {
+          unsafeWindow.WG.setting();
+        } else {
+          ReceiveMessage("<hic>旧脚本尚未加载完成，请稍后重试。</hic>");
+        }
+      });
     var _0x22e32b = $(".setting>.setting-item");
     for (var _0x78e257 = 0; _0x78e257 < _0x22e32b.length; _0x78e257++) {
       var _0x49c64f = $(_0x22e32b[_0x78e257]);
@@ -4627,6 +4646,9 @@ Dialog.setting = {
   footerChanged: function (_0x10521b) {
     let _0x10af9f = this[_0x10521b + "Element"];
     if (!_0x10af9f || _0x10af9f === this.selectitem) {
+      if (_0x10521b === "script" && _0x10af9f && unsafeWindow.WG && typeof unsafeWindow.WG.setting === "function") {
+        unsafeWindow.WG.setting(true);
+      }
       return;
     }
     if (this.selectitem) {
@@ -4643,11 +4665,18 @@ Dialog.setting = {
     } else if (_0x10521b == "custom") {
       this.selectitem.on("click", ".switch", this.switchClick);
       this.selectitem.on("click", ".setting-ok", this.save_custom);
-    } else {
+    } else if (_0x10521b !== "script") {
       this.child = Dialog[_0x10521b];
       this.child.show(this.selectitem);
     }
     this.selectitem.appendTo(Dialog.contentElement);
+    if (_0x10521b === "script") {
+      if (unsafeWindow.WG && typeof unsafeWindow.WG.setting === "function") {
+        unsafeWindow.WG.setting(true);
+      } else {
+        this.selectitem.text("旧脚本尚未加载完成，请稍后重试。");
+      }
+    }
   },
   helpClick: function () {
     var _0x36cd4c = $(this);
@@ -4826,6 +4855,8 @@ const ClientDialogTasks = unsafeWindow.WSMudClient.createModule(
     getDialog: () => Dialog,
     getJQuery: () => $,
     getSendCommand: () => SendCommand,
+    getAutomation: () => unsafeWindow.WG,
+    getRoleId: () => Process.player,
   },
 );
 Dialog.tasks = ClientDialogTasks.tasks;

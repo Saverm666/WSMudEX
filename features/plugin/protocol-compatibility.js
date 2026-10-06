@@ -50,6 +50,88 @@
         return false;
       };
 
+      const greetInterval = 5 * 60 * 1000;
+      function nextGreetReset() {
+        const offset = 8 * 60 * 60 * 1000;
+        const now = Date.now();
+        const reset = new Date(now + offset);
+        reset.setUTCHours(5, 0, 0, 0);
+        if (reset.getTime() <= now + offset) reset.setUTCDate(reset.getUTCDate() + 1);
+        return reset.getTime() - offset + 1000;
+      }
+      function greetEnabled() {
+        return G.connected && WG.online &&
+          (!WG.isPluginFeatureEnabled || WG.isPluginFeatureEnabled("autoGreetOnOpen"));
+      }
+      function isRoleInfo(event) {
+        return event.type === "text" &&
+          /武道塔进度|门派职位等级|今日副本次数/.test(String(event.msg || ""));
+      }
+      function clearGreetRequest() {
+        clearTimeout(WG.autoGreetResponseTimer);
+        WG.autoGreetResponseTimer = null;
+        const entry = WG.autoGreetSilentEntry;
+        if (entry) {
+          clearTimeout(entry.timer);
+          const index = silentMatchers.indexOf(entry);
+          if (index >= 0) silentMatchers.splice(index, 1);
+        }
+        WG.autoGreetSilentEntry = null;
+        WG.autoGreetRequestPending = false;
+      }
+      WG.stopAutoGreetCheck = function () {
+        clearTimeout(WG.autoGreetCheckTimer);
+        WG.autoGreetCheckTimer = null;
+        clearGreetRequest();
+      };
+      WG.checkAutoGreetStatus = function () {
+        if (!greetEnabled() || WG.autoGreetRequestPending ||
+          WG.autoGreetConfirmedUntil > Date.now()) return;
+        WG.autoGreetRequestPending = true;
+        WG.autoGreetSilentEntry = WG.suppressNextResponse(isRoleInfo, 8000);
+        WG.autoGreetResponseTimer = setTimeout(clearGreetRequest, 8000);
+        WG.Send("info");
+      };
+      function scheduleGreetCheck(delay) {
+        clearTimeout(WG.autoGreetCheckTimer);
+        if (!greetEnabled()) return;
+        const untilReset = (WG.autoGreetConfirmedUntil || 0) - Date.now();
+        WG.autoGreetCheckTimer = setTimeout(function () {
+          if (!greetEnabled()) return WG.stopAutoGreetCheck();
+          WG.checkAutoGreetStatus();
+          scheduleGreetCheck();
+        }, untilReset > 0 ? untilReset : delay == null ? greetInterval : delay);
+      }
+      WG.startAutoGreetCheck = function () {
+        WG.stopAutoGreetCheck();
+        if (!greetEnabled()) return;
+        if (WG.autoGreetRoleId !== G.id) {
+          WG.autoGreetRoleId = G.id;
+          WG.autoGreetLastAttempt = null;
+          WG.autoGreetConfirmedUntil = null;
+        }
+        WG.checkAutoGreetStatus();
+        scheduleGreetCheck();
+      };
+      const autoGreetHook = WG.add_hook("text", function (event) {
+        if (!isRoleInfo(event)) return;
+        clearGreetRequest();
+        if (!greetEnabled()) return;
+        const text = String(event.msg || "").replace(/<[^>]*>/g, "");
+        if (/(?:已经|已)\s*(?:向\s*)?(?:门派\s*)?(?:首席\s*)?请安/.test(text)) {
+          WG.autoGreetConfirmedUntil = nextGreetReset();
+          scheduleGreetCheck();
+          return;
+        }
+        if (!/(?:尚未|还未|未曾|未)\s*(?:向\s*)?(?:门派\s*)?(?:首席\s*)?请安/.test(text)) return;
+        if (WG.autoGreetLastAttempt != null &&
+          Date.now() - WG.autoGreetLastAttempt < greetInterval) return;
+        WG.autoGreetConfirmedUntil = null;
+        WG.autoGreetLastAttempt = Date.now();
+        WG.Send("sx greet");
+        scheduleGreetCheck(1000);
+      });
+
       // This hook is installed before upstream GI hooks. It mutates only the
       // parsed automation-side event; the game client still receives raw data.
       const decodeHook = WG.add_hook("dialog", function (event) {
@@ -68,6 +150,10 @@
           if (event.study_per == null) {
             WG.dashboardScoreRequestPending = false;
             clearTimeout(WG.dashboardScoreRequestTimer);
+          } else {
+            WG.automationScore2RequestPending = false;
+            clearTimeout(WG.automationScore2RequestTimer);
+            WG.automationScore2RequestTimer = null;
           }
           WG.applyDashboardScoreSnapshot(event);
           event.level != null && WG.applyDashboardLevel(event.level);
@@ -117,6 +203,36 @@
             G.score.pot = Number(G.score.pot || 0) + Number(rewardMatch[2]);
           }
         }
+      }
+
+      let dashboardTimer = null;
+      let pendingDashboardEvents = [];
+      let destroyed = false;
+      function flushDashboardEvents() {
+        dashboardTimer = null;
+        const events = pendingDashboardEvents;
+        pendingDashboardEvents = [];
+        if (destroyed || G.connected === false) return;
+        WG.dashboardUpdatesSuspended = true;
+        try {
+          for (const pending of events) {
+            if (pending.roleId != null && pending.roleId !== G.id) continue;
+            const event = pending.event;
+            updateDashboardFromEvent(event);
+            if (event.type === "login") {
+              WG.requestSilentPackSnapshot();
+              WG.requestDashboardSnapshot();
+              WG.requestAutomationScore2();
+              WG.suppressNextResponse(
+                response => response.type === "dialog" && response.dialog === "party",
+                3000,
+              );
+              WG.Send("party load");
+            }
+          }
+        } finally {
+          WG.dashboardUpdatesSuspended = false;
+        }
         WG.updateSideDashboard();
       }
 
@@ -133,31 +249,26 @@
           "combat",
         ],
         function (event) {
+          if (event.type === "login") {
+            pendingDashboardEvents = [];
+            while (silentMatchers.length) clearTimeout(silentMatchers.pop().timer);
+            typeof WG.resetDashboardSession === "function" && WG.resetDashboardSession(event.id);
+          }
           // Upstream GI owns G and runs after this compatibility hook. Defer
-          // the dashboard read until all hooks for this packet have finished.
-          setTimeout(function () {
-            updateDashboardFromEvent(event);
-            if (event.type === "login") {
-              WG.requestSilentPackSnapshot();
-              WG.requestDashboardSnapshot();
-              WG.requestAutomationScore2();
-              WG.suppressNextResponse(
-                function (response) {
-                  return (
-                    response.type === "dialog" &&
-                    response.dialog === "party"
-                  );
-                },
-                3000,
-              );
-              WG.Send("party load");
-            }
-          }, 0);
+          // state processing, preserving each increment but rendering once.
+          pendingDashboardEvents.push({ event, roleId: event.type === "login" ? event.id : G.id });
+          if (dashboardTimer === null) dashboardTimer = setTimeout(flushDashboardEvents, 0);
         },
       );
 
       return {
         destroy: function () {
+          destroyed = true;
+          clearTimeout(dashboardTimer);
+          dashboardTimer = null;
+          pendingDashboardEvents = [];
+          WG.stopAutoGreetCheck();
+          WG.remove_hook(autoGreetHook);
           WG.remove_hook(decodeHook);
           WG.remove_hook(dashboardHook);
           while (silentMatchers.length) {

@@ -77,22 +77,15 @@
         return fmt;
     }
 
-    //滚动 -- fork from Suqing funny ---------------fixed
+    // Keep plugin messages on the native queue's follow/pause policy.
     function AutoScroll(name) {
-        if (name) {
-            if ($(name).length != 0) {
-                let scrollTop = $(name)[0].scrollTop;
-                let scrollHeight = $(name)[0].scrollHeight;
-                let height = Math.ceil($(name).height());
-                if (scrollTop < scrollHeight - height) {
-                    let add = (scrollHeight - height < 120) ? 1 : Math.ceil((scrollHeight - height) / 120);
-                    $(name)[0].scrollTop = scrollTop + add;
-                    setTimeout(function () {
-                        AutoScroll(name);
-                    }, 1000 / 120);
-                }
-            }
-        }
+        if (!name) return;
+        const panel = $(name).first();
+        if (!panel.length) return;
+        const queue = unsafeWindow.Process && unsafeWindow.Process.message;
+        if (queue && queue.container && queue.container[0] === panel[0] &&
+            typeof queue.scroll2end === 'function') return queue.scroll2end();
+        panel[0].scrollTo({ top: panel[0].scrollHeight, behavior: 'instant' });
     }
 
 
@@ -239,6 +232,8 @@
             set onclose(fn) {
                 ws.onclose = (e) => {
                     WG.stopPotentialWorkAutoCheck && WG.stopPotentialWorkAutoCheck();
+                    WG.stopAutoGreetCheck && WG.stopAutoGreetCheck();
+                    G.potentialWorkObservedState = void 0;
                     WG.online = false;
                     G.connected = false;
                     auto_relogin = GM_getValue(roleid + "_auto_relogin", auto_relogin);
@@ -634,7 +629,7 @@
         "扬州城-镖局正厅": "jh fam 0 start;go west;go west;go south;go south",
         "扬州城-矿山": "jh fam 0 start;go west;go west;go west;go west",
         "扬州城-江边": "jh fam 0 start;go north;go north;go north;go north",
-        "扬州城-药林": "jh fam 0 start;go east;go east;go east;go east;go south",
+        "扬州城-药林": "jh fam 0 start;go east;go east;go east;go south",
         "扬州城-喜宴": "jh fam 0 start;go north;go north;go east;go up",
         "扬州城-擂台": "jh fam 0 start;go west;go south",
         "扬州城-当铺": "jh fam 0 start;go south;go east",
@@ -1444,6 +1439,18 @@
         sm_state: -1,
         sm_item: null,
         sm_store: null,
+        clearSkillCooldowns: function (skillId) {
+            if (WG.skillCooldownTimers) {
+                for (var [id, timer] of WG.skillCooldownTimers) {
+                    if (skillId != null && id !== skillId) continue;
+                    clearTimeout(timer);
+                    WG.skillCooldownTimers.delete(id);
+                }
+            }
+            G.cds.forEach(function (_value, id) {
+                if (skillId == null || id === skillId) G.cds.set(id, false);
+            });
+        },
         init: function () {
             $("li[command=SelectRole]").on("click", function () {
                 WG.login();
@@ -1666,10 +1673,7 @@
                 }, 500);
                 KEY.do_command("showcombat");
                 //执行记忆面板
-                var closeBorad = localStorage.getItem("closeBorad");
-                if (closeBorad === "true") {
-                    WG.showhideborad()
-                }
+                WG.setFloatingPanelOpen(localStorage.getItem("closeBorad") === "false");
                 WG.runLoginhml();
                 //开启定时器
                 var systime = setInterval(() => {
@@ -5425,18 +5429,22 @@
                 }
             });
         }, //设置
-        setting: function () {
-            KEY.do_command("setting");
-
-            $('.footer-item')[$('.footer-item').length - 1].click();
+        setting: function (renderOnly) {
+            if (renderOnly !== true) {
+                if (!unsafeWindow.Dialog || !unsafeWindow.Dialog.isShow || unsafeWindow.Dialog.curItem !== "setting") {
+                    KEY.do_command("setting");
+                }
+                $('.footer-item[for="script"]').first().trigger('click');
+                return;
+            }
             // GI.configInit();
 
-            if ($('.dialog-custom .zdy_dialog').length == 0) {
+            if ($('.dialog-script .zdy_dialog').length == 0) {
                 var a = UI.syssetting();
-                $(".dialog-custom").prepend(a);
+                $(".dialog-script").empty().append(a);
 
             }
-            $(".dialog-custom").off('click');
+            $(".dialog-script").off('click');
             $("#family").off('change');
             $('#wudao_pfm').off('focusout');
             $(".savebtn").off('click')
@@ -5496,7 +5504,7 @@
             $('#sm_loser').off('click')
 
 
-            $(".dialog-custom").on("click", ".switch2", UI.switchClick);
+            $(".dialog-script").on("click", ".switch2", UI.switchClick);
             $("#family").change(function () {
                 family = $("#family").val();
                 GM_setValue(roleid + "_family", family);
@@ -7036,7 +7044,7 @@
             WG.SendCmd(cmds);
         },
         callcontextMenu: function (idx = 0, n, cmds) {
-            $('.container').contextMenu({
+            $('.room-name').contextMenu({
                 x: 1,
                 y: 1
             })
@@ -7982,16 +7990,15 @@
             WG.add_hook(["status", "login", "exits", "room", "items", "itemadd", "itemremove", "sc", "text", "state", "msg", "perform", "clearDistime", "dispfm", "combat", "die"], function (data) {
                 switch (data.type) {
                     case "login":
-                        var shouldGreetChief = !G.connected || G.id != data.id;
+                        WG.clearSkillCooldowns();
+                        clearTimeout(GI.gcdThread);
+                        G.gcd = false;
                         WG.stopPotentialWorkAutoCheck && WG.stopPotentialWorkAutoCheck();
+                        G.potentialWorkObservedState = void 0;
                         G.id = data.id;
                         G.connected = true;
                         WG.online = true;
-                        if (shouldGreetChief &&
-                            (!WG.isPluginFeatureEnabled || WG.isPluginFeatureEnabled("autoGreetOnOpen")) &&
-                            ws && ws.readyState == 1) {
-                            ws.send("sx greet");
-                        }
+                        WG.startAutoGreetCheck && WG.startAutoGreetCheck();
                         break;
                     case "exits":
                         G.exits = new Map();
@@ -8189,25 +8196,21 @@
                         }
                         break
                     case 'clearDistime':
-                        G.cds.forEach(function (v, k) {
-                            G.cds.set(k, false);
-                        });
+                        WG.clearSkillCooldowns(data.id);
+                        break;
                     case 'dispfm':
                         if (data.id) {
-                            if (data.distime) { }
+                            WG.skillCooldownTimers || (WG.skillCooldownTimers = new Map());
+                            WG.clearSkillCooldowns(data.id);
                             G.cds.set(data.id, true);
-                            var _id = data.id;
-                            setTimeout(function () {
-                                G.cds.set(_id, false);
-                                //技能cd时间到
-                                let pfmtimeTips = {
-                                    data: JSON.stringify({
-                                        type: "enapfm",
-                                        id: _id
-                                    })
-                                };
-                                WG.receive_message(pfmtimeTips);
-                            }, data.distime);
+                            const id = data.id;
+                            const timer = setTimeout(function () {
+                                if (WG.skillCooldownTimers.get(id) !== timer) return;
+                                WG.skillCooldownTimers.delete(id);
+                                G.cds.set(id, false);
+                                WG.receive_message({data: JSON.stringify({type: "enapfm", id})});
+                            }, data.distime || 0);
+                            WG.skillCooldownTimers.set(id, timer);
                         }
                         if (data.rtime) {
                             if (G.gcd) {
@@ -8339,7 +8342,7 @@
                 }
             });
             WG.add_hook("state", function (data) {
-                WG.handlePotentialWorkState(data);
+                if (WG.handlePotentialWorkState(data) === true) return;
                 console.dir(data);
                 if (data.type == 'state' && data.state == undefined) {
                     if (G.room_name.indexOf('副本') >= 0 || G.room_name.indexOf('襄阳') >= 0 ||
@@ -9258,13 +9261,6 @@
                 }
             }
         }
-        $('.room-name').on('click', (e) => {
-            e.preventDefault();
-            $('.container').contextMenu({
-                x: 1,
-                y: 1
-            });
-        });
         function makeTp(mp = 0) {
 
             var mptp = {
@@ -9537,7 +9533,7 @@
             }
         }
         $.contextMenu({
-            selector: '.container',
+            selector: '.room-name',
             build: function ($trigger, e) {
                 //从 trigger 中获取动态创建的菜单项及回调
                 return createSomeMenu();

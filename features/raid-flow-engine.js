@@ -380,27 +380,14 @@
     var e = new AtCmdExecutor("wait", function (e, t) {
       return (
         e.log() && Message.cmdLog(`等待 ${(t / 1e3).toFixed(2)} 秒`),
-        new Promise((e) => {
-          setTimeout(() => e(), t);
-        })
+        raidFlowExecutionRuntime.waitForPerformerDelay(e, t)
       );
     });
     CmdExecuteCenter.addExecutor(e);
   })(),
     (() => {
       var e = new AtCmdExecutor("await", function (e, n) {
-        return new Promise((t) => {
-          var o = (function createWorker(e) {
-            return (
-              (e = new Blob(["(function(){" + e.toString() + "})()"])),
-              (e = window.URL.createObjectURL(e)),
-              new Worker(e)
-            );
-          })("setTimeout(() =>  postMessage('0'), " + n + ")");
-          o.onmessage = function (e) {
-            (o.terminate(), t());
-          };
-        });
+        return raidFlowExecutionRuntime.waitForPerformerWorkerDelay(e, n);
       });
       CmdExecuteCenter.addExecutor(e);
     })(),
@@ -588,6 +575,7 @@
               skin: "layui-layer-rim",
               area: "350px",
               title: "配置参数",
+              zIndex: 2147483500,
               content: __ConfigPanelHtml,
               offset: "auto",
               shift: 2,
@@ -718,6 +706,8 @@
       },
       init: function () {
         (WG.add_hook("login", function (e) {
+          Role.resetSkillCooldowns(null, true);
+          SkillStateMachine.reset();
           ((Role.id = e.id),
             (Role.status = []),
             setTimeout(function () {
@@ -837,7 +827,7 @@
       coolingSkills: function () {
         var e,
           t = [];
-        for (e of Role._coolingSkills) t.push(e.split("_")[0]);
+        for (e of Role._coolingSkills) t.push(e);
         return t;
       },
       coolingSkill: function (e) {
@@ -1053,22 +1043,39 @@
             }));
         });
       },
+      resetSkillCooldowns: function (id, resetGcd) {
+        this._skillCooldownTimers || (this._skillCooldownTimers = new Map());
+        for (const [skill, timer] of this._skillCooldownTimers) {
+          if (id != null && skill !== id) continue;
+          clearTimeout(timer);
+          this._skillCooldownTimers.delete(skill);
+        }
+        this._coolingSkills = [...this._skillCooldownTimers.keys()];
+        if (resetGcd) {
+          clearTimeout(this._rtimer);
+          this._rtimer = null;
+          this.rtime = false;
+        }
+      },
       _monitorSkillCD: function () {
-        WG.add_hook("dispfm", function (e) {
-          var t = Date.parse(new Date()),
-            o = e.id + "_" + t;
-          (Role._coolingSkills.push(o),
-            window.setTimeout(function () {
-              var e = Role._coolingSkills.indexOf(o);
-              -1 != e && Role._coolingSkills.splice(e, 1);
-            }, e.distime),
-            null != e.rtime &&
-              0 != e.rtime &&
-              (null != Role._rtimer && clearTimeout(Role._rtimer),
-              (Role.rtime = !0),
-              (Role._rtimer = setTimeout((e) => {
-                Role.rtime = !1;
-              }, e.rtime))));
+        WG.add_hook("clearDistime", event => Role.resetSkillCooldowns(event.id));
+        WG.add_hook("dispfm", function (event) {
+          if (event.id != null) {
+            Role._skillCooldownTimers || (Role._skillCooldownTimers = new Map());
+            clearTimeout(Role._skillCooldownTimers.get(event.id));
+            const timer = setTimeout(() => {
+              if (Role._skillCooldownTimers.get(event.id) !== timer) return;
+              Role._skillCooldownTimers.delete(event.id);
+              Role._coolingSkills = [...Role._skillCooldownTimers.keys()];
+            }, event.distime || 0);
+            Role._skillCooldownTimers.set(event.id, timer);
+            Role._coolingSkills = [...Role._skillCooldownTimers.keys()];
+          }
+          if (event.rtime != null && event.rtime !== 0) {
+            clearTimeout(Role._rtimer);
+            Role.rtime = true;
+            Role._rtimer = setTimeout(() => { Role.rtime = false; }, event.rtime);
+          }
         });
       },
       _monitorSkills: function () {
@@ -1834,6 +1841,14 @@ stopSSAuto->`;
     Server = RaidFlowServer.Server;
   let UI = {
     showToolbar: function () {
+      if ($("#raidToolbar").length) {
+        UI._toolbarHidden = !1;
+        $("#raidToolbar").removeClass("WG_raid_toolbar_collapsed");
+        $("#raidToolbar .hideRaidToolbar")
+          .attr({ "aria-expanded": "true", "aria-label": "收起流程菜单", title: "收起流程菜单" })
+          .text("‹");
+        return;
+      }
       UI._toolbarHidden &&
         ((UI._toolbarHidden = !1),
         $(".WG_log").before(`
@@ -1856,8 +1871,8 @@ stopSSAuto->`;
                 }
             </style>
             <div id="raidToolbar">
-                <div class="raidToolbar" style="width:calc(100% - 40px);margin:5px 0 5px 0">
-                    <span class="raid-item hideRaidToolbar" style="width:10px"><</span>
+                <div class="raidToolbar">
+                    <button type="button" class="raid-item hideRaidToolbar" aria-expanded="true" aria-label="收起流程菜单" title="收起流程菜单">‹</button>
                     <span class="raid-item forum">🐟 <hiy>咸鱼</hiy></span>
                     <span class="raid-item shortcut">🍯 <hiz>捷径</hiz></span>
                     <span class="raid-item trigger">🍟 <hio>触发</hio></span>
@@ -1871,14 +1886,16 @@ stopSSAuto->`;
         $(".forum").on("click", UI.forum),
         $(".shortcut").on("click", UI.shortcut),
         $(".moreRaid").on("click", UI.dungeons),
-        $(".hideRaidToolbar").on("click", UI.hideToolbar));
+        $("#raidToolbar .hideRaidToolbar").on("click", function () {
+          UI._toolbarHidden ? UI.showToolbar() : UI.hideToolbar();
+        }));
     },
     hideToolbar: function () {
-      var e = document.getElementById("raidToolbar");
-      (null != e &&
-        (e.parentNode.removeChild(e),
-        L.msg("单击右键，选择流程菜单可恢复显示。")),
-        (UI._toolbarHidden = !0));
+      UI._toolbarHidden = !0;
+      $("#raidToolbar").addClass("WG_raid_toolbar_collapsed");
+      $("#raidToolbar .hideRaidToolbar")
+        .attr({ "aria-expanded": "false", "aria-label": "展开流程菜单", title: "展开流程菜单" })
+        .text("›");
     },
     trigger: function () {
       null == unsafeWindow.TriggerUI
@@ -2410,11 +2427,10 @@ stopSSAuto->`;
             return e(
               "span",
               {
-                attrs: { class: "zdy-item" },
+                attrs: { class: "zdy-item WG_dungeon_choice" },
                 style: {
-                  width: "120px",
                   height: "30px",
-                  "line-height": "30px",
+                  "line-height": "28px",
                   "border-radius": "0.5em",
                 },
                 on: {
@@ -2436,7 +2452,7 @@ stopSSAuto->`;
             e = e.map(function (e) {
               return o.createSpan(t, e);
             });
-          return t("div", { attrs: { class: "item-commands" } }, e);
+          return t("div", { attrs: { class: "item-commands WG_dungeon_choices" } }, e);
         },
       });
     },

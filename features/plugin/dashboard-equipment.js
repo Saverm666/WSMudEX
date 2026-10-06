@@ -82,7 +82,58 @@
           ? number.toLocaleString("zh-CN")
           : WG.dashboardPlainText(value);
       },
+      dashboardChineseNumber: function (value) {
+        var text = String(value).trim().replace(/,/g, "");
+        if (!/^[+-]?\d+(?:\.\d+)?$/.test(text))
+          return WG.dashboardPlainText(value);
+        var parts = text.split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{4})+(?!\d))/g, ",");
+        return parts.join(".");
+      },
       dashboardSnapshotVersion: 1,
+      resetDashboardSession: function (roleId) {
+        var previousRole = WG.dashboardSessionRoleId ?? G.id;
+        WG.dashboardSessionRoleId = roleId;
+        for (var key of [
+          "dashboardScoreRequestTimer", "equipmentPickerPackRequestTimer",
+          "automationScore2RequestTimer",
+          "dashboardStateRefreshTimer", "dashboardStateRecheckTimer",
+          "dashboardEquipmentBatchTimer", "equipmentPickerEquipTimer",
+          "equipmentPickerRefreshTimer",
+        ]) {
+          clearTimeout(WG[key]);
+          WG[key] = null;
+        }
+        WG.dashboardScoreRequestPending = false;
+        WG.automationScore2RequestPending = false;
+        WG.equipmentPickerPackRequest = false;
+        WG.dashboardStateRefreshNeedsPack = false;
+        WG.dashboardEquipmentBatchPending = false;
+        WG.equipmentPickerEquipRequest = null;
+        WG.equipmentPickerPreviousItem = null;
+        WG.equipmentPickerStatus = "";
+        WG.equipmentPickerPending = {};
+        WG.closeEquipmentPicker(false);
+        if (previousRole === roleId) return;
+        WG.equipmentPickerItems = [];
+        WG.equipmentPickerEquipment = [];
+        WG.equipmentPickerHasSnapshot = false;
+        WG.equipmentPickerQuickIds = {};
+        WG.dashboardEquipmentAwaitingSnapshot = true;
+        WG.equipmentSlotCacheLoadedKey = null;
+        WG.equipmentSlotCache = {};
+        WG.dashboardSnapshotLoadedKey = null;
+        WG.dashboardEquipmentSignature = null;
+        G.eqs = [];
+        G.score = {};
+        G.score2 = {};
+        if (typeof Dialog !== "undefined" && Dialog.pack) {
+          Dialog.pack.items = null;
+          Dialog.pack.eqs = null;
+        }
+        for (var key of ["level", "hp", "mp", "maxHp", "maxMp", "dashboardJingli"])
+          delete G[key];
+      },
       getDashboardSnapshotKey: function () {
         return (
           (legacy.getRoleId() || G.id || legacy.getRoleName() || "anonymous") +
@@ -153,7 +204,7 @@
         WG.updateDashboardEquipment();
       },
       syncDashboardEquipmentLegacyState: function () {
-        if (!WG.equipmentPickerEquipment.length) return;
+        if (!WG.equipmentPickerHasSnapshot && !WG.equipmentPickerEquipment.length) return;
         G.eqs = WG.equipmentPickerEquipment.slice();
       },
       requestDashboardSnapshot: function () {
@@ -177,6 +228,12 @@
         WG.Send("score");
       },
       requestAutomationScore2: function () {
+        if (WG.automationScore2RequestPending) return;
+        WG.automationScore2RequestPending = true;
+        WG.automationScore2RequestTimer = setTimeout(function () {
+          WG.automationScore2RequestPending = false;
+          WG.automationScore2RequestTimer = null;
+        }, 8000);
         typeof WG.suppressNextResponse === "function" &&
           WG.suppressNextResponse(
             function (event) {
@@ -191,6 +248,7 @@
         WG.Send("score2");
       },
       requestSilentPackSnapshot: function (timeout) {
+        if (WG.equipmentPickerPackRequest) return;
         clearTimeout(WG.equipmentPickerPackRequestTimer);
         WG.equipmentPickerPackRequest = true;
         WG.equipmentPickerPackRequestTimer = setTimeout(function () {
@@ -491,11 +549,6 @@
           WG.equipmentPickerEquipRequest &&
           WG.equipmentPickerEquipRequest == event.id
         ) {
-          WG.equipmentPickerEquipment[event.eq] = {
-            id: event.id,
-            name: "",
-          };
-          WG.equipmentPickerEquipRequest = null;
           WG.run_hook(event.type, event);
           return true;
         }
@@ -519,8 +572,9 @@
         WG.equipmentPickerQuickIds = quickIds;
       },
       getEquipmentPickerItems: function () {
+        if (WG.dashboardEquipmentAwaitingSnapshot) return [];
         var items = WG.equipmentPickerItems;
-        if (!items || !items.length)
+        if (!WG.equipmentPickerHasSnapshot && (!items || !items.length))
           items =
             typeof Dialog != "undefined" && Dialog.pack && Dialog.pack.items
               ? Dialog.pack.items
@@ -530,7 +584,8 @@
         });
       },
       getEquipmentPickerEquipment: function () {
-        if (WG.equipmentPickerEquipment.length)
+        if (WG.dashboardEquipmentAwaitingSnapshot) return [];
+        if (WG.equipmentPickerHasSnapshot || WG.equipmentPickerEquipment.length)
           return WG.equipmentPickerEquipment;
         if (typeof Dialog != "undefined" && Dialog.pack && Dialog.pack.eqs)
           return Dialog.pack.eqs;
@@ -571,6 +626,8 @@
             WG.renderNativeAutoPerformConfig();
         }
         if (event.items) {
+          WG.dashboardEquipmentAwaitingSnapshot = false;
+          WG.equipmentPickerHasSnapshot = true;
           // 完整后台快照使用的是插件对象格式，不能写回原生紧凑数组缓存。
           // 旧缓存若存在则必须失效，确保用户下次打开背包发送完整 pack。
           if (
@@ -617,7 +674,16 @@
           WG.scheduleDashboardStateRefresh({ pack: true, delay: 350 });
         }
         if (event.eq_group != null) WG.finishDashboardEquipmentBatch();
-        else if (!WG.dashboardEquipmentBatchPending) WG.updateDashboardEquipment();
+        else if (!WG.dashboardEquipmentBatchPending && !(WG.equipmentPickerEquipRequest && event.uneq === WG.equipmentPickerEquipSlot)) WG.updateDashboardEquipment();
+        if (WG.equipmentPickerEquipRequest) {
+          var confirmed = WG.getEquipmentPickerEquipment()[WG.equipmentPickerEquipSlot];
+          if (confirmed && confirmed.id === WG.equipmentPickerEquipRequest) {
+            clearTimeout(WG.equipmentPickerEquipTimer);
+            WG.equipmentPickerStatus = "已换上 " + WG.dashboardPlainText(confirmed.name);
+            WG.equipmentPickerEquipRequest = null;
+          }
+        }
+        WG.renderEquipmentPicker();
       },
       sortEquipmentPickerItems: function (items, quickIds) {
         return (items || []).slice().sort(function (first, second) {
@@ -634,52 +700,17 @@
           );
         });
       },
-      appendEquipmentPickerItem: function (container, item, options) {
-        options = options || {};
-        var isCurrent = Boolean(options.current),
-          grade = Number((item && item.grade) || 0),
-          itemName = item && item.name ? item.name : "未装备",
-          className =
-            "WG_equipment_picker_choice grade" +
-            grade +
-            (isCurrent ? " is-current" : ""),
-          choice = isCurrent
-            ? $("<div>", {
-                class: className,
-                role: "group",
-                "aria-label":
-                  "当前装备" + WG.dashboardPlainText(itemName),
-              })
-            : $("<button>", {
-                class: className,
-                type: "button",
-                "data-item-id": item.id,
-                "aria-label": "装备" + WG.dashboardPlainText(itemName),
-              });
-        choice.appendTo(container);
+      appendEquipmentPickerItem: function (container, item) {
+        var choice = $("<button>", {
+          class: "WG_equipment_picker_choice grade" + Number(item.grade || 0),
+          type: "button",
+          "data-item-id": item.id,
+          "aria-label": "装备" + WG.dashboardPlainText(item.name),
+        }).prop("disabled", Boolean(WG.equipmentPickerEquipRequest)).appendTo(container);
         $("<span>", { class: "WG_equipment_picker_name" })
-          .html(itemName)
+          .html(item.name)
+          .attr("title", WG.dashboardPlainText(item.name))
           .appendTo(choice);
-        var meta = $("<span>", {
-          class: "WG_equipment_picker_meta",
-        }).appendTo(choice);
-        isCurrent &&
-          $("<span>", {
-            class: "WG_equipment_picker_current_badge",
-            text: "当前",
-          }).appendTo(meta);
-        item &&
-          item.id &&
-          options.quickIds[item.id] &&
-          $("<span>", {
-            class: "WG_equipment_picker_quick",
-            text: "快速",
-          }).appendTo(meta);
-        item &&
-          item.name &&
-          $("<span>", {
-            text: WG.equipmentGradeNames[grade] || "品阶 " + grade,
-          }).appendTo(meta);
         return choice;
       },
       renderEquipmentPicker: function () {
@@ -689,22 +720,21 @@
         var quickIds = WG.equipmentPickerQuickIds,
           choices = WG.sortEquipmentPickerItems(
             WG.getEquipmentPickerItems().filter(function (item) {
-              return WG.equipmentSlotCache[item.id] === slotIndex;
+              var current = WG.getEquipmentPickerEquipment()[slotIndex] ||
+                (WG.equipmentPickerEquipRequest && WG.equipmentPickerEquipSlot === slotIndex ? WG.equipmentPickerPreviousItem : null);
+              return WG.equipmentSlotCache[item.id] === slotIndex && (!current || current.id !== item.id);
             }),
             quickIds,
           ),
           pendingCount = Object.keys(WG.equipmentPickerPending).length,
-          equipment = WG.getEquipmentPickerEquipment(),
-          currentItem = equipment[slotIndex],
-          current = popup.find(".WG_equipment_picker_current").empty(),
           list = popup.find(".WG_equipment_picker_list").empty();
-        popup
-          .find(".WG_equipment_picker_title")
-          .text(WG.dashboardEquipmentSlots[slotIndex] + " · 选择装备");
-        WG.appendEquipmentPickerItem(current, currentItem, {
-          current: true,
-          quickIds: quickIds,
-        });
+        popup.find(".WG_equipment_picker_dialog")
+          .attr("aria-label", WG.dashboardEquipmentSlots[slotIndex] + " · 选择替换装备")
+          .attr("aria-busy", String(Boolean(WG.equipmentPickerEquipRequest)));
+        popup.find(".WG_equipment_picker_status")
+          .text(WG.equipmentPickerStatus || "")
+          .prop("hidden", !WG.equipmentPickerStatus)
+          .toggleClass("is-pending", Boolean(WG.equipmentPickerEquipRequest));
         for (var item of choices)
           WG.appendEquipmentPickerItem(list, item, {
             quickIds: quickIds,
@@ -725,9 +755,9 @@
         var typography = window.getComputedStyle(source);
         popup.css({
           "font-family": typography.fontFamily,
-          "font-size": typography.fontSize,
+          "font-size": Math.min(parseFloat(typography.fontSize) || 14, 16) + "px",
           "font-weight": typography.fontWeight,
-          "line-height": typography.lineHeight,
+          "line-height": "1.4",
         });
       },
       calculateEquipmentPickerPosition: function (
@@ -737,42 +767,38 @@
         viewportWidth,
         viewportHeight,
       ) {
-        var margin = 10,
-          gap = 10,
-          compact = viewportWidth <= 720 || viewportHeight <= 520,
+        var margin = 8,
+          gap = 2,
           placement = "right",
           left,
-          top;
-        if (compact) {
-          placement = "sheet";
-          left = Math.max(margin / 2, (viewportWidth - dialogWidth) / 2);
-          top = viewportHeight - dialogHeight - margin / 2;
+          top = anchorRect.top,
+          rightLeft = anchorRect.right + gap,
+          leftLeft = anchorRect.left - dialogWidth - gap,
+          anchorBottom = anchorRect.bottom == null ? anchorRect.top : anchorRect.bottom;
+        if (rightLeft + dialogWidth <= viewportWidth - margin) {
+          left = rightLeft;
+        } else if (leftLeft >= margin) {
+          placement = "left";
+          left = leftLeft;
         } else {
-          var rightLeft = anchorRect.right + gap,
-            leftLeft = anchorRect.left - dialogWidth - gap,
-            fitsRight = rightLeft + dialogWidth <= viewportWidth - margin,
-            fitsLeft = leftLeft >= margin;
-          if (
-            fitsRight ||
-            (!fitsLeft && viewportWidth - anchorRect.right >= anchorRect.left)
-          ) {
-            left = rightLeft;
+          left = anchorRect.left;
+          if (viewportHeight - anchorBottom >= anchorRect.top) {
+            placement = "below";
+            top = anchorBottom + gap;
           } else {
-            placement = "left";
-            left = leftLeft;
+            placement = "above";
+            top = anchorRect.top - dialogHeight - gap;
           }
-          top = anchorRect.top - Math.min(44, dialogHeight * 0.14);
         }
-        var edgeMargin = compact ? margin / 2 : margin;
         return {
           placement: placement,
           left: Math.max(
-            edgeMargin,
-            Math.min(left, viewportWidth - dialogWidth - edgeMargin),
+            margin,
+            Math.min(left, viewportWidth - dialogWidth - margin),
           ),
           top: Math.max(
-            edgeMargin,
-            Math.min(top, viewportHeight - dialogHeight - edgeMargin),
+            margin,
+            Math.min(top, viewportHeight - dialogHeight - margin),
           ),
         };
       },
@@ -786,7 +812,7 @@
       positionEquipmentPicker: function (trigger) {
         var popup = $(".WG_equipment_picker"),
           dialog = popup.find(".WG_equipment_picker_dialog"),
-          anchor = trigger || WG.equipmentPickerLastFocus;
+          anchor = trigger || $('.WG_equipment_item[data-slot-index="' + WG.equipmentPickerSlot + '"]')[0] || WG.equipmentPickerLastFocus;
         if (
           !popup.length ||
           popup.prop("hidden") ||
@@ -826,26 +852,31 @@
           WG.rememberEquipmentSlot(currentItem.id, slotIndex);
         WG.syncEquipmentPickerTypography();
         WG.equipmentPickerSlot = slotIndex;
+        if (!WG.equipmentPickerEquipRequest) WG.equipmentPickerStatus = "";
+        $(".WG_equipment_item").removeClass("is-selected");
+        $('.WG_equipment_item[data-slot-index="' + slotIndex + '"]').addClass("is-selected");
         WG.equipmentPickerLastFocus = trigger || document.activeElement;
         popup.prop("hidden", false);
         WG.renderEquipmentPicker();
         WG.scanEquipmentPickerItems();
-        popup.find(".WG_equipment_picker_close").trigger("focus");
+        var firstChoice = popup.find(".WG_equipment_picker_choice").first();
+        (firstChoice.length ? firstChoice : popup.find(".WG_equipment_picker_dialog")).trigger("focus");
         WG.requestSilentPackSnapshot(5000);
         WG.Send("actions");
       },
-      closeEquipmentPicker: function () {
+      closeEquipmentPicker: function (restoreFocus) {
         var slotIndex = WG.equipmentPickerSlot,
           focusTarget = $(
             '.WG_equipment_item[data-slot-index="' + slotIndex + '"]',
           )[0] || WG.equipmentPickerLastFocus;
         $(".WG_equipment_picker").prop("hidden", true);
         WG.equipmentPickerSlot = null;
-        focusTarget && $(focusTarget).trigger("focus");
+        restoreFocus !== false && focusTarget && $(focusTarget).trigger("focus");
         WG.equipmentPickerLastFocus = null;
+        $(".WG_equipment_item").removeClass("is-selected");
       },
       equipFromPicker: function (itemId) {
-        if (!itemId) return;
+        if (!itemId || WG.equipmentPickerEquipRequest || WG.equipmentPickerSlot == null) return;
         var slotIndex = WG.equipmentPickerSlot,
           equipment = WG.getEquipmentPickerEquipment(),
           currentItem = equipment[slotIndex];
@@ -853,9 +884,23 @@
           currentItem.id &&
           WG.rememberEquipmentSlot(currentItem.id, slotIndex);
         WG.equipmentPickerEquipRequest = itemId;
+        WG.equipmentPickerEquipSlot = slotIndex;
+        WG.equipmentPickerPreviousItem = currentItem;
+        var nextItem = WG.getEquipmentPickerItems().find(function (item) { return item.id === itemId; });
+        WG.equipmentPickerStatus = "正在换上 " + WG.dashboardPlainText(nextItem && nextItem.name);
+        WG.renderEquipmentPicker();
+        clearTimeout(WG.equipmentPickerEquipTimer);
+        WG.equipmentPickerEquipTimer = setTimeout(function () {
+          WG.equipmentPickerEquipRequest = null;
+          WG.equipmentPickerStatus = "尚未确认换装结果，可重试或打开背包查看";
+          WG.updateDashboardEquipment();
+          WG.renderEquipmentPicker();
+        }, 8000);
         WG.Send("eq " + itemId);
         WG.closeEquipmentPicker();
-        setTimeout(function () {
+        clearTimeout(WG.equipmentPickerRefreshTimer);
+        WG.equipmentPickerRefreshTimer = setTimeout(function () {
+          WG.equipmentPickerRefreshTimer = null;
           WG.scheduleDashboardStateRefresh({ pack: true, delay: 0 });
           WG.Send("actions");
         }, 200);
@@ -865,9 +910,11 @@
         if (!row.length) return;
         var hasCurrent = current != null && current !== "",
           hasMaximum = maximum != null && maximum !== "",
-          value = hasCurrent ? WG.dashboardNumber(current) : "—";
+          format = key === "potential" || key === "experience"
+            ? WG.dashboardChineseNumber : WG.dashboardNumber,
+          value = hasCurrent ? format(current) : "—";
         hasMaximum &&
-          (value += " / " + WG.dashboardNumber(maximum));
+          (value += " / " + format(maximum));
         row.find(".WG_resource_value").text(value);
         if (row.find(".WG_resource_fill").length) {
           var percent =
@@ -905,7 +952,7 @@
           typeof Dialog !== "undefined" &&
           Dialog.pack &&
           Dialog.pack.eqs &&
-          Dialog.pack.eqs.length
+          Dialog.pack.eqs.length && !WG.dashboardEquipmentAwaitingSnapshot
         ) {
           equipment = Dialog.pack.eqs;
         }
@@ -931,6 +978,7 @@
                 "WG_equipment_item" + gradeClass + (item ? "" : " is-empty"),
               "data-slot-index": index,
               "data-equipment-id": item && item.id ? item.id : "",
+              title: slotName + " · " + (item && item.name ? WG.dashboardPlainText(item.name) : "选择装备"),
               role: "button",
               tabindex: 0,
               "aria-haspopup": "dialog",
@@ -949,10 +997,14 @@
             }).appendTo(equipmentRow);
           item && item.name
             ? equipmentName.html(item.name)
-            : equipmentName.text("未装备");
+            : equipmentName.text("＋");
+          if (WG.equipmentPickerSlot === index && !$(".WG_equipment_picker").prop("hidden")) {
+            equipmentRow.addClass("is-selected");
+          }
         });
       },
       updateSideDashboard: function () {
+        if (WG.dashboardUpdatesSuspended) return;
         if (!$(".WG_side_rail_left").length) return;
         WG.syncDashboardEquipmentLegacyState();
         WG.applyQuickLoadoutNames();
@@ -971,21 +1023,13 @@
             /<(wht|hig|hic|hiy|hiz|hio|ord|hir|hiw)\b/i,
           ),
           realmTag = realmColorMatch ? realmColorMatch[1].toLowerCase() : "nor";
-        levelText !== "—" && (roleText += " · " + levelText);
+        levelText !== "—" && (roleText = levelText + "·" + roleText);
         $(".WG_rail_role")
           .first()
           .empty()
           .append($("<" + realmTag + ">").text(roleText));
         WG.setDashboardResource("hp", hp, maxHp);
         WG.setDashboardResource("mp", mp, maxMp);
-        if (score.limit_mp != null && score.limit_mp !== "") {
-          var mpValue = $('.WG_resource_row[data-resource="mp"]')
-            .find(".WG_resource_value");
-          mpValue.text(
-            mpValue.text() + " (" + WG.dashboardNumber(score.limit_mp) + ")",
-          );
-        }
-
         var energySource =
             G.dashboardJingli != null ? G.dashboardJingli : score.jingli,
           energy = WG.parseDashboardEnergy(energySource),

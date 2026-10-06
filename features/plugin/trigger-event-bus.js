@@ -23,8 +23,12 @@
       post(notification) {
         Object.keys(observers).forEach((index) => {
           const observer = observers[index];
-          if (observer.name === notification.name)
+          if (!observer || observer.name !== notification.name) return;
+          try {
             observer.action(notification.params);
+          } catch (error) {
+            console.error("Trigger observer failed: " + notification.name, error);
+          }
         });
       },
       clear() {

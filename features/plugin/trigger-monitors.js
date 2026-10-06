@@ -30,7 +30,7 @@
     let g = Object.create(null);
     let started = false;
     let clockTimer = null;
-    const cooldownTimers = new Set();
+    const cooldownTimers = new Map();
     const hookIds = [];
     const t = {
       _monitors: [],
@@ -48,14 +48,16 @@
     }
 
     function scheduleSkillCooldown(skillId, delay) {
+      timers.clearTimeout(cooldownTimers.get(skillId));
       let timerId;
       timerId = timers.setTimeout(() => {
-        cooldownTimers.delete(timerId);
+        if (cooldownTimers.get(skillId) !== timerId) return;
+        cooldownTimers.delete(skillId);
         const payload = { 技能id: skillId };
         payload.id = skillId;
         s.post(new Notification("技能冷却结束", payload));
       }, delay);
-      cooldownTimers.add(timerId);
+      cooldownTimers.set(skillId, timerId);
     }
 
     function registerDefinitions() {
@@ -334,6 +336,15 @@
             s.post(e),
             scheduleSkillCooldown(i.id, i.distime));
         });
+        addHook("clearDistime", event => {
+          const ids = event.id == null ? [...cooldownTimers.keys()] : [event.id];
+          for (const id of ids) {
+            if (!cooldownTimers.has(id)) continue;
+            timers.clearTimeout(cooldownTimers.get(id));
+            cooldownTimers.delete(id);
+            s.post(new Notification("技能冷却结束", { 技能id: id, id }));
+          }
+        });
       })),
       t.addMonitor(r),
       {});
@@ -521,7 +532,7 @@
         timers.clearTimeout(clockTimer);
         clockTimer = null;
       }
-      for (const timerId of cooldownTimers) timers.clearTimeout(timerId);
+      for (const timerId of cooldownTimers.values()) timers.clearTimeout(timerId);
       cooldownTimers.clear();
     }
 

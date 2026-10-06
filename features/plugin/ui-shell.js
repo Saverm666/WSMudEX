@@ -52,13 +52,9 @@
             <div class="WG_rail_resizer WG_rail_resizer_left" data-side="left" role="separator" aria-label="调整左侧栏宽度" aria-orientation="vertical" tabindex="0" title="拖动调整左侧栏，双击恢复默认"></div>
             <div class="WG_rail_resizer WG_rail_resizer_right" data-side="right" role="separator" aria-label="调整右侧栏宽度" aria-orientation="vertical" tabindex="0" title="拖动调整右侧栏，双击恢复默认"></div>
             <div class="WG_equipment_picker" hidden>
-              <section class="WG_equipment_picker_dialog" role="dialog" aria-modal="true" aria-labelledby="WG_equipment_picker_title">
-                <header class="WG_equipment_picker_header">
-                  <span class="WG_equipment_picker_title" id="WG_equipment_picker_title">选择装备</span>
-                  <button class="WG_equipment_picker_close" type="button" aria-label="关闭装备选择">×</button>
-                </header>
-                <div class="WG_equipment_picker_current"></div>
+              <section class="WG_equipment_picker_dialog" role="dialog" aria-label="选择替换装备" tabindex="-1">
                 <div class="WG_equipment_picker_list" aria-live="polite"></div>
+                <div class="WG_equipment_picker_status" role="status"></div>
               </section>
             </div>
             <div class="WG_auto_first_round" hidden>
@@ -84,11 +80,11 @@
                 </footer>
               </section>
             </div>
-            <button class="WG_floating_toggle" type="button" aria-expanded="false">打开插件</button>
+            <button class="WG_floating_toggle" type="button" aria-expanded="false" aria-label="打开脚本窗口">脚本</button>
             <section class="WG_floating_panel" aria-label="WSMUD 插件面板">
               <div class="WG_floating_header">
                 <span>WSMUD 助手</span>
-                <button class="WG_floating_close" type="button" aria-label="收起插件面板">×</button>
+                <button class="WG_floating_close" type="button" aria-label="关闭脚本窗口">×</button>
               </div>
               <div class='WG_log'>
                     <pre></pre>

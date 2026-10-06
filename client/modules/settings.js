@@ -65,7 +65,7 @@
       handleAutoWorkState(payload) {
         const title = String((payload && payload.state) || "").replace(/<[^>]*>/g, "").trim();
         const wasTraining = autoWorkState;
-        autoWorkState = /^(?:学习|练习|打坐|读书)/.test(title);
+        autoWorkState = /^(?:你正在\s*)?(?:学习|练习|打坐|读书)/.test(title);
         if (title || !wasTraining || !isClientScript(this.auto_work)) return;
         if (context.isConnected && !context.isConnected()) return;
         const script = context.getScript && context.getScript();

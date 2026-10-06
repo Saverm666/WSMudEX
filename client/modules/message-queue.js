@@ -18,7 +18,7 @@
         queue.size = size;
         queue.max = max;
         container.on(
-          isMobile() ? "touchend" : "wheel",
+          "scroll",
           this.stopDrag.bind(queue),
         );
         queue.scroll_button = jquery(
@@ -47,7 +47,13 @@
           this.count = 0;
           pages.push(jquery("<pre></pre>").appendTo(this.container));
         }
-        pages[pages.length - 1].append(message + "\n");
+        if (this.container.hasClass("channel")) {
+          jquery('<div class="WG_chat_message"></div>')
+            .html(message)
+            .appendTo(pages[pages.length - 1]);
+        } else {
+          pages[pages.length - 1].append(message + "\n");
+        }
         this.count += 1;
       },
       clear: function () {
@@ -68,10 +74,10 @@
             .show()
             .css(
               "top",
-              bounds.bottom - this.scroll_button.height() - hostWindow.screenTop,
+              bounds.bottom - this.scroll_button.height(),
             );
         }
-        element.scrollTop = element.scrollHeight;
+        element.scrollTo({ top: element.scrollHeight, behavior: "instant" });
       },
     };
 

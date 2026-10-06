@@ -124,12 +124,22 @@
         select: function (_0x538581) {
           var _0x4c8351 = this.listElement.find("div[index='" + _0x538581 + "']");
           if (_0x4c8351.length && !_0x4c8351.is(".selected")) {
-            var _0x288c1d = _0x4c8351[0].offsetTop;
-            var _0x13f8d9 = this.listElement.height();
-            if (_0x288c1d > _0x13f8d9 / 2) {
-              _0x288c1d = (_0x13f8d9 - _0x4c8351.height()) / 2;
-              this.listElement[0].scrollTop = _0x288c1d;
-            }
+            const itemElement = _0x4c8351[0];
+            let scrollElement = this.listElement[0];
+            const parent = itemElement.parentElement;
+            // Native dialogs scroll fb-content; floating dialogs scroll fb-left.
+            if (
+              parent && parent !== scrollElement &&
+              /^(auto|scroll)$/.test(global.getComputedStyle(parent).overflowY) &&
+              parent.scrollHeight > parent.clientHeight
+            ) scrollElement = parent;
+            const itemRect = itemElement.getBoundingClientRect();
+            const viewportTop = scrollElement.getBoundingClientRect().top + scrollElement.clientTop;
+            const viewportBottom = viewportTop + scrollElement.clientHeight;
+            if (itemRect.top < viewportTop)
+              scrollElement.scrollTop += itemRect.top - viewportTop;
+            else if (itemRect.bottom > viewportBottom)
+              scrollElement.scrollTop += itemRect.bottom - viewportBottom;
             if (this.selectedItem) {
               this.selectedItem.removeClass("selected");
             }

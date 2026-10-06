@@ -111,6 +111,8 @@
             (this._log = !1),
             (this._running = !1),
             (this._pausing = !1));
+          this._runId = 0;
+          this._stopHandlers = new Set();
         }
         name() {
           return this._name;
@@ -145,17 +147,32 @@
               (this._cc = !0),
               (this._guarding = !1),
               (this._subflows = []),
+              (this._runId += 1),
+              (this._doing = false),
               this._perform());
           }
         }
         stop() {
           if (this._running) {
             this._running = !1;
-            for (var e of this._subflows) e.stop();
+            this._runId += 1;
+            for (var handler of [...this._stopHandlers]) handler();
+            this._stopHandlers.clear();
+            for (var e of [...this._subflows]) e.stop();
+            var callback = this._callback;
+            this._callback = null;
             (this._log &&
               getMessage().append(`<hiy>执行完毕，流程: ${this._name}。</hiy>`),
-              this._callback && this._callback());
+              callback && callback());
           }
+        }
+        onStop(handler) {
+          if (!this._running) {
+            handler();
+            return () => {};
+          }
+          this._stopHandlers.add(handler);
+          return () => this._stopHandlers.delete(handler);
         }
         pause() {
           if (this._running) {
@@ -183,19 +200,21 @@
         }
         async _perform() {
           if (this._running && !this._pausing && !this._doing) {
+            const runId = this._runId;
             var e = this._cmds[this._pc];
             this._pc += 1;
             try {
               ((this._doing = !0), await getCmdExecuteCenter().execute(this, e));
             } catch (e) {
+              if (runId !== this._runId) return;
               return (
                 getMessage().append("<ord>执行错误</ord>: " + e),
                 void this.stop()
               );
             } finally {
-              this._doing = !1;
+              if (runId === this._runId) this._doing = !1;
             }
-            this._perform();
+            if (runId === this._runId) this._perform();
           }
         }
       }
@@ -243,29 +262,37 @@
               return 0 == e.indexOf("@" + i);
             },
             function (n, r) {
-              function Dd(t) {
-                var e = getCmdPrehandleCenter().shared().handle(n, r);
-                let o = /^\s*(.*)\s*$/.exec(e.substring(i.length + 1))[1];
-                (null != o && 0 == o.length && (o = null),
-                  1 == l(n, o)
-                    ? null != s
-                      ? setTimeout((e) => {
-                          t();
-                        }, s)
-                      : t()
-                    : setTimeout(
-                        (e) => {
-                          Dd(t);
-                        },
-                        null != a ? a : 500,
-                      ));
-              }
-              return (
-                n.log() && getMessage().cmdLog("等待，直至符合条件", r),
-                new Promise((e) => {
-                  Dd(e);
-                })
-              );
+              n.log() && getMessage().cmdLog("等待，直至符合条件", r);
+              return new Promise((resolve, reject) => {
+                let timer = null, removeStop = () => {}, settled = false;
+                const finish = error => {
+                  if (settled) return;
+                  settled = true;
+                  clearTimeout(timer);
+                  removeStop();
+                  error ? reject(error) : resolve();
+                };
+                removeStop = n.onStop(() => finish());
+                function poll() {
+                  if (settled) return;
+                  if (!n.runing()) return finish();
+                  try {
+                    if (!n.pausing()) {
+                      const command = getCmdPrehandleCenter().shared().handle(n, r);
+                      const argument = command.substring(i.length + 1).trim() || null;
+                      if (l(n, argument) == true) {
+                        if (s != null) timer = setTimeout(() => finish(), s);
+                        else finish();
+                        return;
+                      }
+                    }
+                    timer = setTimeout(poll, a == null ? 500 : a);
+                  } catch (error) {
+                    finish(error);
+                  }
+                }
+                poll();
+              });
             },
             e,
           ),
@@ -297,46 +324,107 @@
           });
         }
       }
-      function PerformerPromise(o, n, r) {
-        return new Promise((t) => {
-          var e = new (getPerformer())("", o);
-          (r && e.log(r),
-            e.start((e) => {
-              n ? n(t) : t();
-            }));
+      function waitForPerformerDelay(owner, delay) {
+        return new Promise(resolve => {
+          let timer, removeStop = () => {};
+          const finish = () => {
+            clearTimeout(timer);
+            removeStop();
+            resolve();
+          };
+          removeStop = owner.onStop(finish);
+          if (owner.runing()) timer = setTimeout(finish, delay);
         });
       }
-      function UntilRoleFreePerformerPromise(e, t) {
-        return PerformerPromise("@until (:free) == true", e, t);
+      function waitForPerformerWorkerDelay(owner, delay) {
+        return new Promise((resolve, reject) => {
+          let worker = null, url = null, removeStop = () => {}, done = false;
+          const finish = error => {
+            if (done) return;
+            done = true;
+            if (worker) worker.terminate();
+            if (url) window.URL.revokeObjectURL(url);
+            removeStop();
+            error ? reject(error) : resolve();
+          };
+          removeStop = owner.onStop(() => finish());
+          if (done) return;
+          try {
+            const milliseconds = Number(delay);
+            if (!Number.isFinite(milliseconds)) throw new Error("无效的等待时间");
+            url = window.URL.createObjectURL(new Blob(["setTimeout(() => postMessage('0'), " + Math.max(0, milliseconds) + ")"]));
+            worker = new Worker(url);
+            worker.onerror = event => finish(new Error(event.message || "系统命令 Worker 执行失败"));
+            worker.onmessage = () => finish();
+          } catch (error) {
+            finish(error);
+          }
+        });
+      }
+      function PerformerPromise(o, n, r, owner) {
+        return new Promise((t) => {
+          var e = new (getPerformer())("", o);
+          if (owner && !owner.runing()) return t();
+          if (owner) owner._subflows.push(e);
+          r && e.log(r);
+          e.start(() => {
+            if (owner) {
+              const index = owner._subflows.indexOf(e);
+              if (index >= 0) owner._subflows.splice(index, 1);
+              if (!owner.runing()) return t();
+            }
+            n ? n(t) : t();
+          });
+          if (owner && owner.pausing()) e.pause();
+        });
+      }
+      function UntilRoleFreePerformerPromise(e, t, owner) {
+        return PerformerPromise("@until (:free) == true", e, t, owner);
       }
       var SkillStateMachine = {
-          perform: function (e, t) {
-            var o = new Date().getTime();
-            this._perform(e, t, o);
-          },
-          _perform: function (n, t, r) {
-            if (!(null != this._skillStack[n] && this._skillStack[n] > r)) {
-              let o = this;
-              if ((!getRole().isFree() && !t) || getRole().coolingSkill(n) || getRole().rtime)
-                setTimeout((e) => {
-                  o._perform(n, t, r);
-                }, 200);
-              else {
-                ((this._skillStack[n] = r), getWG().SendCmd("perform " + n));
-                let t = setInterval((e) => {
-                  getRole().coolingSkill(n) || 0 == getRole().combating
-                    ? (clearInterval(t),
-                      null != o._skillStack[n] &&
-                        o._skillStack[n] == r &&
-                        delete o._skillStack[n])
-                    : getRole().isFree() && !getRole().rtime && getWG().SendCmd("perform " + n);
-                }, 1e3);
+          perform: function (skillId, force, owner) {
+            const previous = this._tasks.get(skillId);
+            if (previous) previous.cancel();
+            const task = { timer: null, removeStop: () => {} };
+            const cancel = () => {
+              clearTimeout(task.timer);
+              task.removeStop();
+              if (this._tasks.get(skillId) === task) {
+                this._tasks.delete(skillId);
+                delete this._skillStack[skillId];
               }
-            }
+            };
+            task.cancel = cancel;
+            this._tasks.set(skillId, task);
+            if (owner) task.removeStop = owner.onStop(cancel);
+            const attempt = () => {
+              if (this._tasks.get(skillId) !== task) return;
+              if (owner && !owner.runing()) return cancel();
+              if ((owner && owner.pausing()) || (!getRole().isFree() && !force) ||
+                  getRole().coolingSkill(skillId) || getRole().rtime) {
+                task.timer = setTimeout(attempt, 200);
+                return;
+              }
+              this._skillStack[skillId] = Date.now();
+              getWG().SendCmd("perform " + skillId);
+              task.timer = setTimeout(retry, 1000);
+            };
+            const retry = () => {
+              if (this._tasks.get(skillId) !== task) return;
+              if ((owner && !owner.runing()) || getRole().coolingSkill(skillId) || !getRole().combating)
+                return cancel();
+              if ((!owner || !owner.pausing()) && getRole().isFree() && !getRole().rtime)
+                getWG().SendCmd("perform " + skillId);
+              task.timer = setTimeout(retry, 1000);
+            };
+            attempt();
           },
           reset: function () {
+            for (const task of [...this._tasks.values()]) task.cancel();
+            this._tasks.clear();
             this._skillStack = {};
           },
+          _tasks: new Map(),
           _skillStack: {},
           _performNum: 0,
         },
@@ -364,36 +452,21 @@
           (() => {
             var e = new (getCmdExecutor())(
               (e) => !0,
-              (i, e) => {
-                let l = getCmdPrehandleCenter().shared().handle(i, e);
-                return (
-                  (l = getUnpackSystemCmd()(l)),
-                  getUntilRoleFreePerformerPromise()((o) => {
-                    let n = new Date().getTime(),
-                      e = 0;
-                    var t = n - getSystemTips().rejectTimestamp,
-                      r = (function createWorker(e) {
-                        return (
-                          (e = new Blob(["(function(){" + e.toString() + "})()"])) ,
-                          (e = window.URL.createObjectURL(e)),
-                          new Worker(e)
-                        );
-                      })(
-                        "setTimeout(() =>  postMessage('0'), " +
-                          (e = t < 1500 ? t : e) +
-                          ")",
-                      );
-                    r.onmessage = function (e) {
-                      (r.terminate(),
-                        i.log() && getMessage().cmdLog("执行系统命令", l),
-                        i.timeSeries(n),
-                        (i.systemCmdTimestamp = n),
-                        getWG().SendCmd(l));
-                      var t = null == i._cmdDelay ? getSystemCmdDelay() : i._cmdDelay;
-                      setTimeout(o, t);
-                    };
-                  })
-                );
+              async (i, command) => {
+                const text = getUnpackSystemCmd()(getCmdPrehandleCenter().shared().handle(i, command));
+                await getUntilRoleFreePerformerPromise()(null, false, i);
+                if (!i.runing()) return;
+                const elapsed = Date.now() - getSystemTips().rejectTimestamp;
+                await waitForPerformerWorkerDelay(i, elapsed >= 0 && elapsed < 1500 ? 1500 - elapsed : 0);
+                if (!i.runing()) return;
+                // A pause can begin while the worker is waiting.
+                await getUntilRoleFreePerformerPromise()(null, false, i);
+                if (!i.runing()) return;
+                i.log() && getMessage().cmdLog("执行系统命令", text);
+                i.timeSeries(Date.now());
+                i.systemCmdTimestamp = Date.now();
+                getWG().SendCmd(text);
+                await waitForPerformerDelay(i, i._cmdDelay == null ? getSystemCmdDelay() : i._cmdDelay);
               },
               getCmdExecutorPriority().low,
             );
@@ -401,19 +474,17 @@
           })();
           (() => {
             var e = new (getAtCmdExecutor())("force", function (o, n) {
-              return new Promise((e) => {
-                (o.log() && getMessage().cmdLog("强行执行系统命令", n),
-                  getWG().SendCmd(n));
-                var t = null == o._cmdDelay ? getSystemCmdDelay() : o._cmdDelay;
-                setTimeout(e, t);
-              });
+              if (!o.runing()) return;
+              o.log() && getMessage().cmdLog("强行执行系统命令", n);
+              getWG().SendCmd(n);
+              return waitForPerformerDelay(o, o._cmdDelay == null ? getSystemCmdDelay() : o._cmdDelay);
             });
             getCmdExecuteCenter().addExecutor(e);
           })(),
           (() => {
             var e = new (getAtCmdExecutor())("perform", function (e, t) {
               var o;
-              for (o of t.split(",")) getSkillStateMachine().perform(o, !1);
+              for (o of t.split(",")) getSkillStateMachine().perform(o, !1, e);
             });
             getCmdExecuteCenter().addExecutor(e);
           })(),
@@ -492,6 +563,8 @@
         UntilAtCmdExecutor,
         UntilSearchedAtCmdExecutor,
         PerformerPromise,
+        waitForPerformerDelay,
+        waitForPerformerWorkerDelay,
         UntilRoleFreePerformerPromise,
         SkillStateMachine,
         systemCmdDelay,
