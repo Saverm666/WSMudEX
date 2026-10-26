@@ -130,25 +130,36 @@
           switchToActionLoadout: function (group, done) {
             group = normalizeLoadoutGroup(group);
             if (group == null) return done && done();
-            if (WG.currentEquipmentGroup === group) return done && done();
+            // The group identifies a preset, not its current equipment: manual
+            // item changes can leave the same group highlighted.
+            WG.cancelActionLoadoutSwitch && WG.cancelActionLoadoutSwitch();
             var finished = false,
               hook,
               timer,
-              finish = function () {
+              finish = function (confirmed) {
                 if (finished) return;
                 finished = true;
                 hook != null && WG.remove_hook(hook);
                 timer != null && clearTimeout(timer);
-                WG.currentEquipmentGroup = group;
-                done && done();
+                WG.cancelActionLoadoutSwitch = null;
+                if (confirmed) {
+                  WG.currentEquipmentGroup = group;
+                  done && done();
+                }
               };
+            WG.cancelActionLoadoutSwitch = function () { finish(false); };
             hook = WG.add_hook("dialog", function (event) {
               event &&
                 event.dialog === "pack" &&
+                event.eq_group != null &&
                 Number(event.eq_group) === group &&
-                finish();
+                finish(true);
             });
-            timer = setTimeout(finish, 1500);
+            timer = setTimeout(function () {
+              finish(false);
+              if (typeof global.ReceiveMessage === "function")
+                global.ReceiveMessage("<hir>未确认配装切换成功，已取消后续动作，请重试。</hir>");
+            }, 5000);
             WG.Send("eqgroup " + group);
           },
           runAfterActionLoadout: function (section, key, done) {
@@ -208,9 +219,14 @@
         global.WGRunActionBarCommandWithLoadout =
           WG.runActionBarCommandWithLoadout;
         setTimeout(WG.installActionBarLoadoutObserver, 0);
+        var sessionHook = WG.add_hook("login", function () {
+          WG.cancelActionLoadoutSwitch && WG.cancelActionLoadoutSwitch();
+        });
 
         return {
           destroy: function () {
+            WG.cancelActionLoadoutSwitch && WG.cancelActionLoadoutSwitch();
+            WG.remove_hook(sessionHook);
             WG.destroyActionBarLoadoutObserver();
             if (
               global.WGRunActionBarCommandWithLoadout ===

@@ -47,8 +47,11 @@
           let greeted = null;
           if (/(?:尚未|还未|未曾|未)\s*(?:向\s*)?(?:门派\s*)?(?:首席\s*)?请安/.test(text)) greeted = false;
           else if (/(?:已经|已)\s*(?:向\s*)?(?:门派\s*)?(?:首席\s*)?请安/.test(text)) greeted = true;
+          const soulLine = text.split(/\r?\n/).find(line => line.includes('帝魄')) || '';
+          const soul = /(?:尚未|还未|未曾|未)\s*(?:获取|获得|领取)\s*帝魄|帝魄(?:碎片)?\s*[：:]?\s*(?:尚未|未)/.test(soulLine) ? false :
+            /(?:已经|已)\s*(?:获取|获得|领取)\s*帝魄|帝魄(?:碎片)?\s*[：:]?\s*(?:已经|已)/.test(soulLine) ? true : null;
           return {
-            imperialSoulObtained: fragment ? Number(fragment[1]) > 0 : null,
+            imperialSoulObtained: fragment ? Number(fragment[1]) > 0 : soul,
             imperialSoulCount: fragment ? Number(fragment[1]) : null,
             imperialSoulLimit: fragment ? Number(fragment[2]) : null,
             sectWarContribution: contribution ? number(contribution[1]) : null,
@@ -137,9 +140,13 @@
           };
           this.dailyStatusCancel = finish;
           this.dailyStatusPending = true;
-          const matchesInfo = event => event.type === "text" &&
-            /武道塔进度|门派职位等级|今日副本次数/.test(String(event.msg || "")) &&
-            /帝魄|请安|师门功绩|门派战(?:争)?(?:贡献|功绩)|襄阳军功/.test(String(event.msg || ""));
+          const matchesInfo = event => {
+            if (event.type !== "text") return false;
+            const text = String(event.msg || "");
+            const parsed = this.parseDailyStatus(text);
+            const fields = [parsed.imperialSoulObtained, parsed.greeted, parsed.sectWarContribution, parsed.xiangyangMerit].filter(value => value != null).length;
+            return fields >= 2 || (fields > 0 && /武道塔进度|门派职位等级|今日副本次数/.test(text));
+          };
           hook = automation.add_hook(["text", "login"], event => {
             if (event.type === "login" || getRoleId() !== roleId) {
               finish();

@@ -112,7 +112,7 @@
         WG.equipmentPickerEquipRequest = null;
         WG.equipmentPickerPreviousItem = null;
         WG.equipmentPickerStatus = "";
-        WG.equipmentPickerPending = {};
+        WG.clearEquipmentPickerPending();
         WG.closeEquipmentPicker(false);
         if (previousRole === roleId) return;
         WG.equipmentPickerItems = [];
@@ -216,6 +216,7 @@
               return (
                 event.type === "dialog" &&
                 event.dialog === "score" &&
+                (event.id == null || event.id == G.id) &&
                 event.limit_mp != null
               );
             },
@@ -240,6 +241,7 @@
               return (
                 event.type === "dialog" &&
                 event.dialog === "score" &&
+                (event.id == null || event.id == G.id) &&
                 event.study_per != null
               );
             },
@@ -308,7 +310,10 @@
           WG.scheduleDashboardStateRefresh({ delay: 700 });
       },
       applyDashboardScoreSnapshot: function (event) {
-        if (!event || event.dialog !== "score" || event.study_per != null)
+        if (
+          !event || event.dialog !== "score" || event.study_per != null ||
+          (event.id != null && event.id != G.id)
+        )
           return false;
         var hasResource = ["hp", "max_hp", "mp", "max_mp", "jingli"].some(
           function (key) {
@@ -438,6 +443,14 @@
       equipmentSlotCacheLoadedKey: null,
       equipmentSlotCacheSaveTimers: {},
       equipmentPickerPending: {},
+      equipmentPickerPendingTimers: {},
+      equipmentPickerDetailTimedOut: false,
+      clearEquipmentPickerPending: function () {
+        for (var timer of Object.values(WG.equipmentPickerPendingTimers)) clearTimeout(timer);
+        WG.equipmentPickerPendingTimers = {};
+        WG.equipmentPickerPending = {};
+        WG.equipmentPickerDetailTimedOut = false;
+      },
       equipmentPickerQuickIds: {},
       equipmentPickerItems: [],
       equipmentPickerEquipment: [],
@@ -469,7 +482,7 @@
               cache[itemId] = slotIndex;
           }
         WG.equipmentSlotCache = cache;
-        WG.equipmentPickerPending = {};
+        WG.clearEquipmentPickerPending();
         WG.equipmentSlotCacheLoadedKey = cacheKey;
       },
       saveEquipmentSlotCache: function () {
@@ -558,6 +571,8 @@
             WG.parseEquipmentSlot(event.desc),
           );
           delete WG.equipmentPickerPending[event.id];
+          clearTimeout(WG.equipmentPickerPendingTimers[event.id]);
+          delete WG.equipmentPickerPendingTimers[event.id];
           WG.renderEquipmentPicker();
           return true;
         }
@@ -602,6 +617,16 @@
             !WG.equipmentPickerPending[item.id]
           ) {
             WG.equipmentPickerPending[item.id] = true;
+            (function (itemId) {
+              var timer = setTimeout(function () {
+                if (WG.equipmentPickerPendingTimers[itemId] !== timer) return;
+                delete WG.equipmentPickerPendingTimers[itemId];
+                delete WG.equipmentPickerPending[itemId];
+                WG.equipmentPickerDetailTimedOut = true;
+                WG.renderEquipmentPicker();
+              }, 5000);
+              WG.equipmentPickerPendingTimers[itemId] = timer;
+            })(item.id);
             requests.push("checkobj " + item.id + " from item");
           }
         }
@@ -641,6 +666,13 @@
           var data = WG.deserializePackData(structuredClone(event));
           WG.equipmentPickerItems = data.items || [];
           WG.equipmentPickerEquipment = data.eqs || [];
+          var availableIds = new Set(WG.equipmentPickerItems.map(function (item) { return item && item.id; }));
+          for (var itemId of Object.keys(WG.equipmentPickerPending)) {
+            if (availableIds.has(itemId)) continue;
+            clearTimeout(WG.equipmentPickerPendingTimers[itemId]);
+            delete WG.equipmentPickerPendingTimers[itemId];
+            delete WG.equipmentPickerPending[itemId];
+          }
           WG.syncDashboardEquipmentLegacyState();
           for (var index = 0; index < (data.eqs || []).length; index++) {
             var equippedItem = data.eqs[index];
@@ -744,7 +776,9 @@
             class: "WG_equipment_picker_empty",
             text: pendingCount
               ? "正在读取可装备物品…"
-              : "背包中没有适用于此栏位的装备",
+              : WG.equipmentPickerDetailTimedOut
+                ? "装备信息未完整返回，请重新打开重试"
+                : "背包中没有适用于此栏位的装备",
           }).appendTo(list);
         WG.positionEquipmentPicker();
       },
@@ -852,6 +886,7 @@
           WG.rememberEquipmentSlot(currentItem.id, slotIndex);
         WG.syncEquipmentPickerTypography();
         WG.equipmentPickerSlot = slotIndex;
+        WG.equipmentPickerDetailTimedOut = false;
         if (!WG.equipmentPickerEquipRequest) WG.equipmentPickerStatus = "";
         $(".WG_equipment_item").removeClass("is-selected");
         $('.WG_equipment_item[data-slot-index="' + slotIndex + '"]').addClass("is-selected");
@@ -1016,13 +1051,15 @@
           mp = player.mp != null ? player.mp : G.mp ?? score.mp,
           maxMp =
             G.maxMp != null ? G.maxMp : player.max_mp ?? score.max_mp,
-          roleText = legacy.getRoleName() || "当前角色",
+          roleText = (WG.getOverlayRoleName && WG.getOverlayRoleName()) || legacy.getRoleName() || "当前角色",
           levelSource = G.level || score.level,
           levelText = WG.dashboardPlainText(levelSource),
           realmColorMatch = String(levelSource || "").match(
             /<(wht|hig|hic|hiy|hiz|hio|ord|hir|hiw)\b/i,
           ),
           realmTag = realmColorMatch ? realmColorMatch[1].toLowerCase() : "nor";
+        if (WG.getOverlayRoleName && levelText !== "—" && roleText.startsWith(levelText))
+          roleText = roleText.slice(levelText.length).replace(/^[·\s]+/, '') || roleText;
         levelText !== "—" && (roleText = levelText + "·" + roleText);
         $(".WG_rail_role")
           .first()
@@ -1576,7 +1613,7 @@
               resolve(result.pack ? result : null);
             };
           hook = WG.add_hook("dialog", function (event) {
-            if (!event) return;
+            if (!event || (event.dialog == "score" && event.id != null && event.id != G.id)) return;
             if (event.dialog == "pack" && event.items) {
               result.pack = WG.deserializePackData(structuredClone(event));
             } else if (event.dialog == "score" && event.study_per != null) {
@@ -1607,6 +1644,7 @@
                 return (
                   event.type == "dialog" &&
                   event.dialog == "score" &&
+                  (event.id == null || event.id == G.id) &&
                   event.study_per == null &&
                   (event.int != null || event.int_add != null)
                 );
@@ -1618,6 +1656,7 @@
                 return (
                   event.type == "dialog" &&
                   event.dialog == "score" &&
+                  (event.id == null || event.id == G.id) &&
                   event.study_per != null
                 );
               },
@@ -1981,6 +2020,7 @@
 
     return {
       destroy: function () {
+        WG.clearEquipmentPickerPending();
         WG.destroyAutoAttackStateSync();
       },
     };

@@ -8,6 +8,17 @@
       .replace(/\s+/g, " ");
   }
 
+  function stripRepeatedDetailTitle(description, title, readText) {
+    const html = String(description || "");
+    const firstLine = /^\s*([^\r\n]*?)(?:\r?\n|<br\s*\/?\s*>|$)/i.exec(html);
+    if (!firstLine || !title || typeof readText !== "function") return html;
+    const normalize = (value) => readText(value).replace(/\u00a0/g, " ").trim();
+    const name = normalize(title);
+    return name && normalize(firstLine[1]) === name
+      ? html.slice(firstLine[0].length)
+      : html;
+  }
+
   function describePopupDetailCommand(command) {
     const normalized = normalizeCommand(command);
     if (!normalized) return null;
@@ -174,6 +185,7 @@
   }
 
   const api = {
+    stripRepeatedDetailTitle: stripRepeatedDetailTitle,
     normalizeCommand: normalizeCommand,
     describePopupDetailCommand: describePopupDetailCommand,
     isPopupDetailCommand: isPopupDetailCommand,
@@ -183,6 +195,7 @@
     isDialogPanelPayload: isDialogPanelPayload,
     textDetailTimeout: 2500,
   };
+  global.WSMudDetailPopupPolicy = api;
 
   if (typeof module === "object" && module.exports) {
     module.exports = api;

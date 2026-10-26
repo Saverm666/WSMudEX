@@ -13,6 +13,8 @@
     "features/plugin/role-switcher.js",
     "features/plugin/dashboard-equipment.js",
     "features/plugin/protocol-compatibility.js",
+    "features/plugin/mimic-skill-catalog.js",
+    "features/plugin/mimic-skills.js",
     "features/plugin/travel-equipment-option.js",
     "features/plugin/navigation-enhancements.js",
     "features/plugin/raid-flow-execution-runtime.js",
@@ -95,7 +97,7 @@
         console.error("脚本加载失败:", scriptUrl);
         resolve();
       };
-      document.head.appendChild(scriptElement);
+      (document.head || document.documentElement).appendChild(scriptElement);
     });
   }
 
@@ -110,13 +112,41 @@
       ? plan.selectPageScripts(location.hostname, PAGE_SCRIPT_PATHS)
       : PAGE_SCRIPT_PATHS;
 
-    let loadingSequence = Promise.resolve();
+    // Overlay clients create their game DOM after the module bootstrap mounts.
+    // Load our jQuery/plugins afterwards, preserving the site's initialization.
+    let loadingSequence = shouldReplaceGameClient()
+      ? Promise.resolve()
+      : injectPageScript(chrome.runtime.getURL('features/plugin/overlay-bootstrap.js'))
+          .then(waitForOverlayClient);
     scriptPaths.forEach((scriptPath) => {
       loadingSequence = loadingSequence.then(() =>
-        injectPageScript(chrome.runtime.getURL(scriptPath)),
+        extensionEnabled ? injectPageScript(chrome.runtime.getURL(scriptPath)) : undefined,
       );
     });
-    return loadingSequence;
+    return loadingSequence.then(() => {
+      if (extensionEnabled && !shouldReplaceGameClient() && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new Event('WSMudOverlayReady'));
+      }
+    });
+  }
+
+  function waitForOverlayClient() {
+    const ready = () => document.querySelector('.content-message') && document.querySelector('.dialog');
+    if (ready()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const observer = new MutationObserver(() => {
+        if (ready()) {
+          observer.disconnect();
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      const timer = setTimeout(() => {
+        observer.disconnect();
+        reject(new Error('改版客户端尚未就绪，跳过插件加载'));
+      }, 15000);
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    });
   }
 
   function isWsmudHostname(hostname) {
@@ -278,7 +308,7 @@
       hydratePageSettings(storedSettings);
       startOriginalScriptInterceptor();
 
-      if (document.readyState === "loading") {
+      if (document.readyState === "loading" && shouldReplaceGameClient()) {
         document.addEventListener("DOMContentLoaded", reportPageScriptLoading);
       } else {
         reportPageScriptLoading();

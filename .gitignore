@@ -111,7 +111,10 @@ build/
 !/features/plugin/core.js
 !/features/plugin/dashboard-equipment.js
 !/features/plugin/layout-controls.js
+!/features/plugin/mimic-skill-catalog.js
+!/features/plugin/mimic-skills.js
 !/features/plugin/native-client-compat.js
+!/features/plugin/overlay-bootstrap.js
 !/features/plugin/navigation-enhancements.js
 !/features/plugin/pack-data-codec.js
 !/features/plugin/plugin-enhancements.css

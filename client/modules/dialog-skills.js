@@ -114,6 +114,7 @@ const skills = {
       _0xc3d72d.push('<span cmd="lingwu ', _0x4c05f8.id, '">进阶</span>');
       _0xc3d72d.push('<span cmd="lingwu2 ', _0x4c05f8.id, '">融合</span>');
       _0xc3d72d.push('<span cmd="fangqi ', _0x4c05f8.id, '">遗忘</span>');
+      if (global.WG && global.WG.mimicDetailButton) _0xc3d72d.push(global.WG.mimicDetailButton(_0x4c05f8.id));
     }
     _0xc3d72d.push("</div>");
     return _0xc3d72d.join("");
@@ -296,6 +297,7 @@ const skills = {
     }
     if (_0x55f754.books) {
       this.books = this.format_books(_0x55f754.books);
+      if (this.isShow && this.selected_item != 2) return;
       if (this.isShow) {
         return this.showBooks();
       } else {
@@ -342,10 +344,14 @@ const skills = {
         var _0x55cb1c = this.items[_0x4f0a];
         this.skills[_0x55cb1c.id] = _0x55cb1c;
       }
-      if (this.items.length > 10 && this.selected_item < 0) {
+      if (this.selected_item < 0) {
         this.footerChanged(0);
       }
       this.createSkillItems(this.items);
+      if (this.selected_item == 2 && this.element.is('.dialog-books')) {
+        if (this.books) this.showBooks();
+        else this.element.empty();
+      }
     }
     if (_0x55f754.limit) {
       this.limit = _0x55f754.limit;
@@ -372,9 +378,9 @@ const skills = {
     this.element.removeClass("hide-item");
     currentDialog().activateSkillsWindow();
     if (!this.items) {
-      SendCommand("cha");
+      !currentDialog().processingPayload && SendCommand("cha");
     } else {
-      SendCommand("cha none");
+      !currentDialog().processingPayload && SendCommand("cha none");
       currentDialog().title(this.title);
       currentDialog().icon("book");
       this.create_footer();

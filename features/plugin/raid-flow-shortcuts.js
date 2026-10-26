@@ -10,6 +10,320 @@
       const Performer = context.Performer;
       const THIsland = context.THIsland;
       const registerAtCommand = context.registerAtCommand;
+      let escortOwner;
+      const escortChoices = {
+        payment: ["免费", "元宝"], mode: ["安全", "高危"],
+        car: ["普通民镖", "商行商标", "珍宝玉镖", "皇家贡镖", "九霄仙贡镖"],
+        end: ["修炼", "挖矿"],
+      };
+      const escortKeys = { payment: "free", mode: "type", car: "car", end: "end", weapon: "weapon", count: "count" };
+      const roleName = () => context.getWG().getOverlayRoleName() || context.getRole().name;
+      const itemName = (item) => String(item.name || "").replace(/<[^>]*>/g, "").trim();
+
+      async function escortOperation(owner, execute) {
+        const WG = context.getWG();
+        let active = true, timer, wake;
+        const hooks = [];
+        const cleanup = () => {
+          active = false;
+          clearTimeout(timer);
+          if (wake) wake(false);
+          for (const hook of hooks) WG.remove_hook(hook);
+        };
+        const removeStop = owner.onStop(cleanup);
+        const wait = (delay) => new Promise((resolve) => {
+          if (!active || !owner.runing()) { resolve(false); return; }
+          wake = resolve;
+          timer = setTimeout(() => { wake = null; resolve(active && owner.runing()); }, delay);
+        });
+        const until = async (predicate, timeout, error) => {
+          let deadline = Date.now() + timeout;
+          while (active && owner.runing()) {
+            const before = Date.now();
+            if (!owner.pausing() && predicate()) return true;
+            if (owner.pausing()) deadline += 150;
+            else if (before >= deadline) throw new Error(error);
+            if (!(await wait(150))) return false;
+          }
+          return false;
+        };
+        try {
+          return await execute({ wait, until, hook(types, callback) { hooks.push(WG.add_hook(types, callback)); } });
+        } finally {
+          removeStop();
+          cleanup();
+        }
+      }
+
+      async function suspendEscortWork(owner) {
+        const setting = context.getSetting && context.getSetting();
+        if (!setting || !setting.auto_work || setting.auto_work === "0") return;
+        const saved = setting.auto_work;
+        const roleId = context.getSessionRoleId();
+        let acknowledged = false;
+        setting.auto_work = 0;
+        owner.onStop(() => {
+          if (context.getSessionRoleId() === roleId && (!setting.auto_work || setting.auto_work === "0"))
+            context.restoreAutoWork(saved);
+        });
+        await escortOperation(owner, async ({ hook, until }) => {
+          hook("setting_update", (event) => {
+            if (event.key === "auto_work" && Number(event.value) === 0) acknowledged = true;
+          });
+          context.getWG().SendCmd("setting auto_work 0");
+          await until(() => acknowledged, 8000, "未确认暂停自动工作，取消运镖；请检查高级设置。");
+        });
+      }
+
+      function readyEscort(owner) {
+        return escortOperation(owner, ({ until }) => until(() => {
+          const room = context.getRoom();
+          return /镖局正厅/.test(String(room.name || "")) && Object.values(room._itemsInRoom).some((item) =>
+            itemName(item).includes("林震南") && !item.p && Number(item.hp) !== 0 && !itemName(item).includes("的尸体"));
+        }, 8000, "传送后未找到镖局和林震南，运镖已停止。"));
+      }
+
+      async function finishEscort(owner) {
+        const end = owner.tempParams.escort_end;
+        if (!escortChoices.end.includes(end)) throw new Error("运镖结束动作无效。");
+        await escortOperation(owner, async ({ wait }) => {
+          const WG = context.getWG();
+          if (end === "修炼") {
+            WG.SendCmd("goto home");
+            if (!(await wait(500))) return;
+            WG.SendCmd("go west");
+            if (!(await wait(500))) return;
+          }
+          if (!owner.runing()) return;
+          const label = typeof owner.name === "function" ? owner.name() : "自动运镖";
+          context.appendMessage(label + "结束，开始" + end + "。");
+          WG.SendCmd(end === "挖矿" ? "goto kuang" : "xiulian");
+          owner.stop();
+        });
+      }
+
+      async function quickEscort(owner) {
+        await escortOperation(owner, async ({ hook, until, wait }) => {
+          const WG = context.getWG();
+          const npc = Object.values(context.getRoom()._itemsInRoom).find((item) => itemName(item).includes("林震南") && !item.p && Number(item.hp) !== 0);
+          if (!npc) throw new Error("未找到林震南，快速运镖已停止。");
+          let reply, action, reason, requested = false, completed = false, carMenu = false;
+          const actionsFrom = (event) => {
+            const value = event.commands || event.items;
+            const actions = Array.isArray(value) ? value.slice() : value ? [value] : [];
+            if ((event.msg || event.desc) && context.jquery) {
+              const $ = context.jquery;
+              const root = $('<div>').append($.parseHTML(String(event.msg || event.desc), undefined, false));
+              root.find('[cmd]').each(function () { actions.push({ name: $(this).text(), cmd: $(this).attr('cmd') }); });
+            }
+            for (const item of actions) {
+              if (!item || typeof item !== "object") continue;
+              const command = String(item.cmd || "").trim();
+              const label = String(item.name || "");
+              if (/^task\s+yunbiao\s+/.test(command) && !/元宝/.test(label) &&
+                  (/\bqkstart\b/.test(command) || /快速运镖|雇佣镖师/.test(label) ||
+                   (reply === "fee" && /确认|确定|开始/.test(label))) &&
+                  !/\b(?:choose_high|confirm_high|choose|continue)\b/.test(command))
+                action = { command, terminal: /\bqkstart\b/.test(command) || reply === "fee" };
+              if (/^task\s+yunbiao\s+(?:choose|choose_high)\s+/.test(command)) carMenu = true;
+            }
+          };
+          hook(["text", "cmds", "item", "dialog"], (event) => {
+            const text = String(event.msg || event.desc || "").replace(/<[^>]*>/g, "");
+            if (/你需要支付.*黄金.*雇佣费用/.test(text)) reply = "fee";
+            else if (/最近暂时.*委托|只有总镖头|你不是.*运镖|如果你不能把镖银|没有这个|^什么[？?]$|黄金.*不够|无法.*快速运镖/.test(text)) reason = text;
+            if (requested && !/未完成|没有完成|尚未|雇佣费用|确认/.test(text) && /(?:完成|结束).*运镖|运镖.*(?:完成|结束)|镖师.*(?:出发|上路|启程)/.test(text)) completed = true;
+            actionsFrom(event);
+          });
+          context.appendMessage("正在查询快速运镖入口。");
+          WG.SendCmd("ksyb " + npc.id);
+          if (!(await until(() => reply || action || reason || carMenu, 8000, "快速运镖没有返回可用入口，流程已停止。"))) return;
+          if (reason) throw new Error(reason);
+          if (!action && !reply) throw new Error("服务器返回了普通/高危选车菜单，没有快速运镖入口；请使用自动运镖。");
+          const selected = action;
+          action = null;
+          requested = true;
+          WG.SendCmd(selected ? selected.command : "task yunbiao " + npc.id + " qkstart");
+          if (selected && !selected.terminal) {
+            if (!(await until(() => reply || action || reason || completed, 8000, "快速运镖未返回雇佣确认，流程已停止。"))) return;
+            if (reason) throw new Error(reason);
+            if (!completed) {
+              if (action && !action.terminal) throw new Error("服务器未返回快速运镖确认命令，流程已停止。");
+              WG.SendCmd(action ? action.command : "task yunbiao " + npc.id + " qkstart");
+            }
+          }
+          context.appendMessage("已发送快速运镖命令，等待游戏处理。");
+          if (!(await wait(11000))) return;
+          if (reason) throw new Error(reason);
+        });
+      }
+
+      function loadEscort(owner) {
+        if (!context.isOverlay()) throw new Error("自动运镖仅用于改版站点。");
+        if (escortOwner && escortOwner.runing() && escortOwner !== owner) throw new Error("已有自动运镖流程正在运行。");
+        escortOwner = owner;
+        const WG = context.getWG();
+        const loginHook = WG.add_hook("login", () => owner.stop());
+        owner.onStop(() => {
+          WG.remove_hook(loginHook);
+          if (escortOwner === owner) escortOwner = null;
+        });
+        for (const [key, suffix] of Object.entries(escortKeys)) {
+          const stored = context.getStore().get(roleName() + "yunbiao_" + suffix);
+          const value = key === "count" ? (Number.isSafeInteger(Number(stored)) && Number(stored) > 0 ? Number(stored) : 1)
+            : key === "weapon" ? stored || "龙纹剑" : escortChoices[key].includes(stored) ? stored : escortChoices[key][0];
+          context.updateVariable(owner, "escort_" + key, value);
+        }
+      }
+
+      function saveEscort(owner) {
+        const params = owner.tempParams;
+        for (const [key, choices] of Object.entries(escortChoices)) {
+          if (!choices.includes(params["escort_" + key])) throw new Error("运镖配置无效，请重新选择。");
+        }
+        if (!String(params.escort_weapon || "").trim()) throw new Error("运镖武器不能为空。");
+        const count = Number(params.escort_count);
+        if (!Number.isSafeInteger(count) || count < 1) throw new Error("运镖次数必须为正整数。");
+        context.updateVariable(owner, "escort_count", count);
+        for (const [key, suffix] of Object.entries(escortKeys))
+          context.getStore().set(roleName() + "yunbiao_" + suffix, params["escort_" + key]);
+      }
+
+      function equipEscort(owner) {
+        const WG = context.getWG();
+        const role = context.getRole();
+        const name = String(owner.tempParams.escort_weapon).trim();
+        const matches = (item) => item && itemName(item).includes(name);
+        if (Object.values(role.equipments).some(matches)) return;
+        return new Promise((resolve, reject) => {
+          let timer, hook, removeStop, target;
+          const finish = (error) => {
+            clearTimeout(timer);
+            WG.remove_hook(hook);
+            if (removeStop) removeStop();
+            if (error) reject(new Error(error));
+            else resolve();
+          };
+          hook = WG.add_hook("dialog", (event) => {
+            if (event.dialog !== "pack" || owner.pausing()) return;
+            if (target) {
+              if (event.eq != null && String(event.id) === String(target.id)) finish();
+              return;
+            }
+            if (!event.items && !event.eqs) return;
+            if (Object.values(role.equipments).some(matches)) { finish(); return; }
+            target = Object.values(role.items).find(matches);
+            if (!target) { finish("未找到运镖武器，流程停止。"); return; }
+            WG.SendCmd("eq " + target.id);
+          });
+          timer = setTimeout(() => finish("运镖武器确认超时，流程停止。"), 8000);
+          removeStop = owner.onStop(() => finish());
+          WG.SendCmd("pack");
+        });
+      }
+
+      async function escortTrip(owner) {
+        if (!context.isOverlay()) throw new Error("自动运镖仅用于改版站点。");
+        const { escort_payment: payment, escort_mode: mode, escort_car: car } = owner.tempParams;
+        const cars = { 普通民镖: "normal", 商行商标: "merchant", 珍宝玉镖: "treasure", 皇家贡镖: "royal", 九霄仙贡镖: "xian" };
+        if (!escortChoices.payment.includes(payment) || !escortChoices.mode.includes(mode) || !escortChoices.car.includes(car))
+          throw new Error("运镖配置无效，请重新选择。");
+        if (escortOwner && escortOwner !== owner) throw new Error("已有自动运镖流程正在运行。");
+        const WG = context.getWG();
+        const room = context.getRoom();
+        const role = context.getRole();
+        const npc = Object.values(room._itemsInRoom).find((item) => itemName(item).includes("林震南") && !item.p && Number(item.hp) !== 0 && !itemName(item).includes("的尸体"));
+        if (!npc) throw new Error("未找到林震南，取消接镖。");
+        escortOwner = owner;
+        context.updateVariable(owner, "escort_done", "否");
+        let phase = "quote", quote, seen = false, removedAt = 0, lastAttack = 0;
+        let timer, wake, closed = false;
+        const hooks = [];
+        const cleanup = () => {
+          if (closed) return;
+          closed = true;
+          clearTimeout(timer);
+          if (wake) wake(false);
+          for (const hook of hooks) WG.remove_hook(hook);
+          WG.SendCmd("$stoppfm");
+        };
+        const removeStop = owner.onStop(cleanup);
+        const wait = (delay) => new Promise((resolve) => {
+          wake = resolve;
+          timer = setTimeout(() => { wake = null; resolve(!closed && owner.runing()); }, delay);
+        });
+        const send = (command) => {
+          if (!closed && owner.runing() && !owner.pausing()) WG.SendCmd(command);
+        };
+        const carName = roleName() + "的镖车";
+        hooks.push(WG.add_hook("login", () => owner.stop()));
+        hooks.push(WG.add_hook(["room", "itemremove"], (event) => {
+          if (event.type === "room") removedAt = 0;
+          else if (seen && String(event.id) === String(seen)) removedAt = Date.now();
+        }));
+        hooks.push(WG.add_hook("text", (event) => {
+          if (phase !== "quote") return;
+          const text = String(event.msg || event.text || "").replace(/<[^>]*>/g, "");
+          if (/本趟使用免费次数/.test(text)) quote = { free: true };
+          else {
+            const cost = text.match(/本趟将额外消耗\s*(\d+)\s*元宝购买次数/);
+            if (cost) quote = { cost: Number(cost[1]) };
+            else if (/再一起来找我|及以上境界接取|上限|次数不足|没有.*次数|休息下|未完成.*运镖|正在.*运镖/.test(text)) quote = { reason: text };
+          }
+        }));
+        try {
+          send(`task yunbiao ${mode === "高危" ? "choose_high" : "choose"} ${cars[car]} ${npc.id}`);
+          const quoteDeadline = Date.now() + 8000;
+          while (!quote && !closed) {
+            if (Date.now() > quoteDeadline) throw new Error("接镖提示超时，未确认接镖。");
+            if (!(await wait(200))) return;
+          }
+          if (closed) return;
+          if (quote.reason || (!quote.free && payment === "免费")) {
+            context.appendMessage(quote.reason || "免费次数已用完，自动运镖结束。");
+            context.updateVariable(owner, "escort_done", "是");
+            return;
+          }
+          while (owner.pausing()) if (!(await wait(200))) return;
+          phase = "escort";
+          send(`task yunbiao ${mode === "高危" ? "confirm_high" : "confirm"} ${cars[car]} ${npc.id}`);
+          send("$startpfm");
+          const start = Date.now();
+          while (await wait(500)) {
+            if (owner.pausing()) continue;
+            const items = Object.values(room._itemsInRoom);
+            const cart = items.find((item) => itemName(item) === carName && !item.p && Number(item.hp) !== 0);
+            if (cart) { seen = cart.id; removedAt = 0; }
+            if (!seen && Date.now() - start > 15000) throw new Error("接镖后未找到自己的镖车，流程停止。");
+            if (Date.now() - start > 600000) throw new Error("本趟运镖超过十分钟，流程停止。");
+            const bandit = items.find((item) => !item.p && !item.me && Number(item.hp) !== 0 && itemName(item) === "拦路大盗 江洋大盗");
+            if (bandit) {
+              if (!role.combating && Date.now() - lastAttack > 2000) {
+                send("state stop");
+                send("kill " + bandit.id);
+                lastAttack = Date.now();
+              }
+              continue;
+            }
+            if (role.combating) continue;
+            if (cart) {
+              send("select " + cart.id);
+              if (!(await wait(500))) return;
+              // A room transition or manual stop can invalidate the selected ID.
+              if (room._itemsInRoom[cart.id] && !role.combating) send("task yunbiao continue " + cart.id);
+              if (!(await wait(1000))) return;
+            } else if (removedAt && Date.now() - removedAt >= 3000) {
+              const completed = Number(owner.tempParams.escort_completed || 0) + 1;
+              context.updateVariable(owner, "escort_completed", completed);
+              context.appendMessage("已完成运镖 " + completed + "/" + owner.tempParams.escort_count + " 趟。");
+              return;
+            }
+          }
+        } finally {
+          removeStop();
+          cleanup();
+        }
+      }
 
       if (
         typeof Performer !== "function" ||
@@ -33,9 +347,50 @@
             THIsland.zhoubotong(e);
           });
         });
+        registerAtCommand("escortLoad", loadEscort);
+        registerAtCommand("escortSave", saveEscort);
+        registerAtCommand("escortEquip", equipEscort);
+        registerAtCommand("escortTrip", escortTrip);
+        registerAtCommand("escortSuspend", suspendEscortWork);
+        registerAtCommand("escortReady", readyEscort);
+        registerAtCommand("escortFinish", finishEscort);
+        registerAtCommand("quickEscortLoad", loadEscort);
+        registerAtCommand("quickEscortRun", quickEscort);
       }
 
       const DungeonsShortcuts = {
+        auto_yunbiao: function () {
+          if (!context.isOverlay()) return;
+          if (escortOwner && escortOwner.runing()) {
+            context.appendMessage("已有自动运镖流程正在运行。");
+            return;
+          }
+          context.startManaged("自动运镖", `
+@escortLoad
+#input ($escort_weapon) = 运镖武器,(escort_weapon)
+#input ($escort_count) = 运镖次数,(escort_count)
+#select ($escort_payment) = 次数购买,免费|元宝,(escort_payment)
+#select ($escort_mode) = 运镖类型（高危需师徒组队）,安全|高危,(escort_mode)
+#select ($escort_car) = 镖车（九霄需武仙以上）,普通民镖|商行商标|珍宝玉镖|皇家贡镖|九霄仙贡镖,(escort_car)
+#select ($escort_end) = 结束后动作,修炼|挖矿,(escort_end)
+#config
+[if] (escort_weapon) == null || (escort_payment) == null || (escort_mode) == null || (escort_car) == null || (escort_end) == null
+  @print 运镖选项不能为空。
+  [exit]
+@escortSave
+@escortSuspend
+@cmdDelay 300
+($escort_done) = 否
+($escort_completed) = 0
+[while] (escort_done) == 否 && (escort_completed) < (escort_count)
+  @force state stop
+  $to 扬州城-镖局正厅
+  @escortReady
+  @escortEquip
+  @escortTrip
+@escortFinish
+`);
+        },
         xianyu_xyjq: function () {
           var e = new Performer(
             "襄阳捐钱",
@@ -85,6 +440,19 @@ stopstate;jh fam 8 start
           (e.log(!1), e.start());
         },
         xianyu_ksyb: function () {
+          if (context.isOverlay && context.isOverlay()) {
+            if (escortOwner && escortOwner.runing()) { context.appendMessage("已有运镖流程正在运行。"); return; }
+            context.startManaged("快速运镖", `
+@quickEscortLoad
+@escortSuspend
+@force state stop
+$to 扬州城-镖局正厅
+@escortReady
+@quickEscortRun
+@escortFinish
+`);
+            return;
+          }
           var e = new Performer(
             "快速运镖",
             `

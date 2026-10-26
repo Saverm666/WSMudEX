@@ -162,6 +162,7 @@
         }
         return (false);
     }
+    var overlayClient = /(^|\.)wxmud1\.com$/i.test(location.hostname);
     var CanUse = false;
     if (WebSocket) {
         console.log('插件可正常运行,Plugins can run normally');
@@ -173,7 +174,10 @@
             });
         }
         var _ws = WebSocket,
-            ws, ws_on_message;
+            ws, ws_on_message = overlayClient ? function (msg) {
+                return unsafeWindow.WSMudNativeClientCompat.forwardNativeSocketMessage(msg);
+            } : undefined;
+        if (!overlayClient) {
         unsafeWindow.WebSocket = function (uri) {
             ws = new _ws(uri);
             //document.getElementsByClassName("signinfo")[0].innerHTML = "<HIR>武神传说SS插件正常运行！ QQ群 367657589</HIR>"
@@ -236,6 +240,7 @@
                     G.potentialWorkObservedState = void 0;
                     WG.online = false;
                     G.connected = false;
+                    WG.resetMimicSkills && WG.resetMimicSkills();
                     auto_relogin = GM_getValue(roleid + "_auto_relogin", auto_relogin);
                     fn(e);
                     if (auto_relogin == "开") {
@@ -254,6 +259,7 @@
                 ws.onerror = fn;
             },
             send: function (text) {
+                if (WG.observeMimicCommand) WG.observeMimicCommand(text);
                 if (G.cookie == undefined) {
                     G.cookie = text;
                 }
@@ -318,6 +324,8 @@
             }
         };
 
+        }
+
         var cmd_queue = [],
             cmd_busy = false,
             echo = false;
@@ -356,6 +364,12 @@
             }
         };
         var send_cmd = function (cmd, no_queue) {
+            if (overlayClient && typeof unsafeWindow.SendCommand === "function") {
+                for (var command of (Array.isArray(cmd) ? cmd : String(cmd).split(';'))) {
+                    if (command.trim()) unsafeWindow.SendCommand(command);
+                }
+                return;
+            }
             if (ws && ws.readyState == 1) {
                 cmd = cmd instanceof Array ? cmd : cmd.split(';');
                 if (unsafeWindow.Setting && typeof unsafeWindow.Setting.observeAutoWorkCommand === 'function') {
@@ -1494,6 +1508,13 @@
         login: function () {
             role = $('.role-list .select').text().split(/[\s\n]/).pop();
             roleid = $('.role-list .select').attr('roleid')
+            if (overlayClient && unsafeWindow.Process && unsafeWindow.Process.player != null) {
+                roleid = unsafeWindow.Process.player;
+                var currentRole = $('.role-list [roleid]').filter(function () {
+                    return $(this).attr('roleid') === String(roleid);
+                }).first();
+                role = currentRole.find('.role-name').text().trim() || currentRole.text().trim() || String(roleid);
+            }
             GM_listValues().map(function (key) {
                 if (key.indexOf(role + "_") == 0) {
                     var tmpVal = key.split(role + "_")[1];
@@ -5788,8 +5809,8 @@
             $('.clean_dps').on('click', WG.clean_dps);
 
             $('.clear_skillJson').on('click', () => {
-                zdyskilllist == "";
-                messageAppend("已关闭自定义，请刷新重新获取技能数据!");
+                zdyskilllist = "";
+                messageAppend("已关闭自定义技能顺序。");
                 zdyskills = "关";
                 GM_setValue(roleid + "_zdyskilllist", "");
                 GM_setValue(roleid + "_zdyskills", zdyskills);
@@ -6130,13 +6151,10 @@
             }
         },
         run_hook: function (type, data) {
-            //console.log(data);
-            for (var i = 0; i < this.hooks.length; i++) {
-                // if (this.hooks[i] !== undefined && this.hooks[i].type == type) {
-                //     this.hooks[i].fn(data);
-                // }
+            // A completed listener can remove itself while dispatching this packet.
+            for (var listener of this.hooks.slice()) {
+                if (!this.hooks.includes(listener)) continue;
                 try {
-                    var listener = this.hooks[i];
                     if (listener.types == data.type || (listener.types instanceof Array && $
                                                         .inArray(data.type, listener.types) >= 0)) {
                         listener.fn(data);
@@ -6243,6 +6261,7 @@
                 }
             }
 
+            if (WG.captureMimicResponse && WG.captureMimicResponse(data)) return;
             if (WG.captureEquipmentPickerResponse && WG.captureEquipmentPickerResponse(data)) {
                 return;
             }
@@ -6297,9 +6316,22 @@
                 return;
             }
             if (data.type == "perform") {
-                if (zdyskills == "开") {
+                if (zdyskills == "开" && Array.isArray(data.skills)) {
                     zdyskilllist = GM_getValue(roleid + "_zdyskilllist", zdyskilllist);
-                    data.skills = JSON.parse(zdyskilllist);
+                    try {
+                        const saved = JSON.parse(zdyskilllist);
+                        if (!Array.isArray(saved) || saved.some(skill => !skill || typeof skill.id !== "string"))
+                            throw new Error("invalid skill order");
+                        const order = new Map(saved.map((skill, index) => [skill.id, index]));
+                        // A saved order must not reintroduce skills from the previous loadout.
+                        data.skills = data.skills.slice().sort((first, second) =>
+                            (order.get(first.id) ?? saved.length) - (order.get(second.id) ?? saved.length));
+                    } catch (error) {
+                        zdyskills = "关";
+                        zdyskilllist = "";
+                        GM_setValue(roleid + "_zdyskills", zdyskills);
+                        GM_setValue(roleid + "_zdyskilllist", "");
+                    }
                     let p = deepCopy(msg);
                     p.data = JSON.stringify(data);
                     WG.run_hook(data.type, data);
@@ -6541,6 +6573,13 @@
             if (unsafeWindow.funny) {
                 if (unsafeWindow.funny.API != null) { unsafeWindow.funny.API.onmessage(msg); }
             }
+        },
+
+        forwardNativeSocketMessage: function (msg) {
+            if (overlayClient && unsafeWindow.WSMudNativeClientCompat) {
+                return unsafeWindow.WSMudNativeClientCompat.forwardNativeSocketMessage(msg);
+            }
+            if (typeof ws_on_message === "function") return ws_on_message.call(this, msg);
         },
 
     };
@@ -7944,8 +7983,8 @@
                 }
                 if (data.dialog == "skills") {
                     if (data.enable != null && zdyskills == "开") {
-                        zdyskilllist == "";
-                        messageAppend("检测到更换技能,请刷新重新获取技能数据!");
+                        zdyskilllist = "";
+                        messageAppend("检测到更换技能，已关闭旧自定义顺序，等待新招式列表。");
                         zdyskills = "关";
                         GM_setValue(roleid + "_zdyskilllist", "");
                         GM_setValue(roleid + "_zdyskills", zdyskills);
@@ -8189,6 +8228,7 @@
                         if (data.max_mp != null) G.maxMp = data.max_mp;
                         break
                     case "perform":
+                        if (!Array.isArray(data.skills)) break;
                         G.skills = data.skills;
                         if (zdyskilllist == "") {
                             zdyskilllist = JSON.stringify(data.skills);
@@ -8495,7 +8535,7 @@
                         AutoScroll(".content-message");
                     }
                 }
-                if (data.dialog == 'score') {
+                if (data.dialog == 'score' && (data.id == null || data.id == G.id)) {
 
                     console.log("score update");
                     if (!G.level && (data.level != null)) {
@@ -9195,6 +9235,9 @@
         unsafeWindow.T = T;
         unsafeWindow.L = L;
         unsafeWindow.G = G;
+        if (unsafeWindow.WSMudNativeClientCompat) {
+            unsafeWindow.WSMudNativeClientCompat.install(unsafeWindow);
+        }
         unsafeWindow.messageClear = messageClear;
         unsafeWindow.messageAppend = messageAppend;
         unsafeWindow.send_cmd = send_cmd;

@@ -42,7 +42,12 @@
             event.type === "dialog" &&
             typeof Dialog !== "undefined" &&
             Dialog.isShow &&
-            Dialog.curItem === event.dialog
+            Dialog.curItem === event.dialog &&
+            // The same panel type can belong to a follower or master.
+            (event.dialog !== "score" ||
+              (Dialog.score &&
+                String(Dialog.score.uid ?? G.id) ===
+                  String(event.id ?? G.id)))
           )
             return false;
           return true;

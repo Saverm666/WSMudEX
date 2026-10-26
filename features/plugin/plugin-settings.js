@@ -223,8 +223,8 @@
           if (flags.floatingPanels === false) {
             Dialog.clearLayerStack && Dialog.clearLayerStack();
             Dialog.clearLayerRequests && Dialog.clearLayerRequests();
-            Dialog.deactivateFloatingDialog();
-          } else Dialog.activateFloatingDialog();
+            Dialog.deactivateFloatingDialog && Dialog.deactivateFloatingDialog();
+          } else if (Dialog.activateFloatingDialog) Dialog.activateFloatingDialog();
         }
       },
       appendPluginSettingsSwitch: function (container, options) {
@@ -395,7 +395,7 @@
         $(".WG_plugin_settings")
           .prop("hidden", true)
           .attr("aria-hidden", "true");
-        var focusTarget = $('.right-bar > [command="pluginsettings"]').first();
+        var focusTarget = $('.right-bar > [command="pluginsettings"], .right-bar > [data-wsmud-command="pluginsettings"]').first();
         focusTarget.trigger("focus");
       },
       parsePluginAutoPerformIds: function (value) {
@@ -655,7 +655,7 @@
       },
       initPluginSettings: function () {
         ensureSettingsView();
-        var pluginTool = $('.right-bar > [command="pluginsettings"]').first();
+        var pluginTool = $('.right-bar > [command="pluginsettings"], .right-bar > [data-wsmud-command="pluginsettings"]').first();
         if (!pluginTool.length) {
           pluginTool = $(
             '<span command="pluginsettings" class="tool-item" title="插件设置"><svg class="tool-icon WG_plugin_tool_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 2v6m8-6v6M5 8h14v2a7 7 0 0 1-14 0V8Zm7 9v5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="tool-text">插件</span></span>',
@@ -664,6 +664,8 @@
         pluginTool
           .addClass("WG_plugin_tool")
           .attr({ title: "插件设置", "aria-label": "插件设置" });
+        if (global.WSMudOverlayBootstrapInstalled)
+          pluginTool.attr("data-wsmud-command", "pluginsettings").removeAttr("command");
         var pluginToolText = pluginTool.children(".tool-text").first();
         if (!pluginToolText.length)
           pluginToolText = $('<span class="tool-text"></span>').appendTo(

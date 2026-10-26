@@ -29,7 +29,7 @@
     const list = Array.isArray(scripts) ? scripts.slice() : [];
     if (shouldReplaceGameClient(hostname)) return list;
     return list.filter(function (scriptPath) {
-      return String(scriptPath || '').indexOf('client/') !== 0;
+      return ['client/core.js', 'client/modules/dialog-tasks.js', 'client/modules/settings.js', 'client/modules/detail-popup-policy.js'].includes(scriptPath) || String(scriptPath || '').indexOf('client/') !== 0;
     });
   }
 

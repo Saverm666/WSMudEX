@@ -1921,7 +1921,7 @@ var Process = {
       .attr("itemid", item.id || "")
       .attr("data-popup-kind", item.popupKind || "");
     popup.find(".WG_item_popup_title").html(item.name || "交互");
-    popup.find(".WG_item_popup_desc").html(item.desc || "");
+    popup.find(".WG_item_popup_desc").html(DetailPopupPolicy.stripRepeatedDetailTitle(item.desc, item.name, (html) => $("<span>").html(html).text()));
     popup.find(".WG_item_popup_actions").html(commandHtml);
     popup.css("display", "block").attr("aria-hidden", "false");
     Process.restoreItemPopupPosition(popup);
@@ -1965,7 +1965,7 @@ var Process = {
       .css("display", "block")
       .attr("aria-hidden", "false");
     popup.find(".WG_item_popup_title").html(item.name || "详情");
-    popup.find(".WG_item_popup_desc").html(item.desc || "");
+    popup.find(".WG_item_popup_desc").html(DetailPopupPolicy.stripRepeatedDetailTitle(item.desc, item.name, (html) => $("<span>").html(html).text()));
     popup.find(".WG_item_popup_actions").html(commandHtml);
     Process.restoreItemPopupPosition(popup, parentSurface);
     popup.find(".WG_item_popup_close").trigger("focus");
@@ -2149,9 +2149,9 @@ var Process = {
       );
     }
     var itemPopupSecondary = Process.consumeItemPopupSecondary();
-    openedFloatingLayer && Dialog.show(_0x4ce96c.dialog);
     Dialog.processingPayload = true;
     try {
+      openedFloatingLayer && Dialog.show(_0x4ce96c.dialog);
       Dialog.show(_0x4ce96c.dialog, _0x4ce96c);
     } finally {
       Dialog.processingPayload = false;
@@ -2482,7 +2482,10 @@ const Dialog = {
     header
       .off(".WG_skills_window_drag")
       .on("pointerdown.WG_skills_window_drag", function (event) {
-        if ($(event.target).closest(".dialog-close").length) return;
+        // Header commands must receive their own click, without pointer capture.
+        if ($(event.target).closest(
+          '.dialog-close, [cmd], a, button, input, select, textarea, label, [role="button"], [role="link"], [contenteditable]:not([contenteditable="false"])',
+        ).length) return;
         var pointerEvent = event.originalEvent;
         if (pointerEvent.button != null && pointerEvent.button !== 0) return;
         var rect = Dialog.element[0].getBoundingClientRect();
@@ -2768,6 +2771,8 @@ const Dialog = {
       returnFocus: pending && pending.sourceElement,
     };
     this.layerStack.push(frame);
+    // A detached parent must not render background updates into the child.
+    this[this.curItem] && (this[this.curItem].isShow = false);
     this.curItem = null;
     this.isShow = false;
     this.element.removeClass("WG_skills_window");
@@ -2867,6 +2872,12 @@ const Dialog = {
     onData: function (_0x3ddb88) {
       console.log(_0x3ddb88);
       this.data = _0x3ddb88;
+      // A new character's named score is its basic panel, even if the previous
+      // character was left on details or titles.
+      if (_0x3ddb88.id != null && _0x3ddb88.id != this.uid && _0x3ddb88.name) {
+        if (this.isShow && this.selectIndex) this.footerChanged(0);
+        else this.selectIndex = 0;
+      }
       this.init_elem();
       Dialog.titleElement.html(_0x3ddb88.name);
       Dialog.icon("user");
@@ -2921,6 +2932,7 @@ const Dialog = {
       if (_0x44b140) {
         return;
       }
+      if (Dialog.processingPayload) return;
       if (!this.selectIndex) {
         SendCommand("score");
       } else if (this.selectIndex == 1) {
@@ -2943,7 +2955,7 @@ const Dialog = {
       var _0xd72a5a = $(this.footer[this.selectIndex][1]).appendTo(
         Dialog.contentElement.empty(),
       );
-      if (_0x59cfe1 == 1) {
+      if (_0x59cfe1 == 1 && !Dialog.processingPayload) {
         if (this.uid && Process.player != this.uid) {
           SendCommand("score2 " + this.uid);
         } else {
@@ -3438,7 +3450,9 @@ Dialog.pack = {
       }
     }
     if (this.isShow) {
-      return SendCommand(this.items ? "pack none" : "pack");
+      if (!Dialog.processingPayload)
+        return SendCommand(this.items ? "pack none" : "pack");
+      return;
     }
     this.isShow = true;
     this.init_element();
@@ -3447,9 +3461,9 @@ Dialog.pack = {
     this.packElement.removeClass("cleanup");
     this.element.appendTo(Dialog.contentElement);
     if (!this.items) {
-      SendCommand("pack");
+      !Dialog.processingPayload && SendCommand("pack");
     } else {
-      SendCommand("pack none");
+      !Dialog.processingPayload && SendCommand("pack none");
       this.show_items();
     }
   },

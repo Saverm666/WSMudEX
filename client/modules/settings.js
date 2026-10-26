@@ -10,7 +10,21 @@
       return player ? "WSMudEX_auto_work_script_" + player : null;
     }
     function isClientScript(value) {
-      return typeof value === "string" && value.trim().startsWith("#");
+      return typeof value === "string" && (/^[#_]/.test(value.trim()) || /[;@]/.test(value));
+    }
+    function autoWorkPreference(value) {
+      const key = scriptKey();
+      if (!key) return null;
+      try {
+        if (value === undefined) {
+          const saved = JSON.parse(hostWindow.localStorage.getItem(key + "_preference"));
+          return saved && (typeof saved.value === "string" || saved.value === 0 || saved.value === 1) ? saved : null;
+        }
+        hostWindow.localStorage.setItem(key + "_preference", JSON.stringify({ value }));
+      } catch (error) {
+        console.log("中断后自动操作配置存储失败：", error);
+      }
+      return null;
     }
     function storedScript(value) {
       const key = scriptKey();
@@ -37,16 +51,14 @@
             if (key !== "fullscreen") { this.set_prop(key, values[key]); this[key] = values[key]; }
           }
         }
-        if (isClientScript(this.auto_work)) {
-          storedScript(this.auto_work);
-          context.sendCommand("setting auto_work 0");
-        } else if (!this.auto_work || this.auto_work === "0") {
-          const script = storedScript();
-          if (isClientScript(script)) this.auto_work = script;
-        } else storedScript("");
+        this.restoreAutoWork();
       },
       set_prop(key, value) { const Process = context.getProcess(); const Combat = context.getCombat(); switch (key) { case "fontsize": jquery(".container,.dialog-confirm").css("font-size", value); break; case "font": jquery(".container").css("font-family", value === "none" ? "" : value); break; case "combat_size": jquery(".content-bottom").css("font-size", value); break; case "dialog_size": jquery(".dialog").css("font-size", value); break; case "show_sa": Combat.refActions(); break; case "menu_size": jquery(".bottom-bar").css("font-size", value); break; case "fontcolor": jquery(documentRef.body).css("color", value); break; case "backcolor": jquery(documentRef.body).css("background-color", value); break; case "hide_roomdesc": jquery(".room_desc")[value ? "hide" : "show"](); break; case "exits_dir": Process.exits(); break; case "off_hp": jquery(".item-status")[value ? "hide" : "show"](); break; case "combat_wrap": jquery(".combat-commands").toggleClass("combat-wrap", !!value); break; case "action_wrap": jquery(".room-commands").toggleClass("combat-wrap", !!value); break; case "item_autoheight": value ? jquery(".room_items").removeAttr("style") : jquery(".room_items").attr("style", "max-height: 8rem; overflow-y: auto;"); break; case "show_hp": if (!Combat.IsShow) jquery(".room-item>.item-status")[value === 1 ? "show" : "hide"](); break; case "show_hpnum": if (Process.cur_room) Process.items(Process.cur_room); break; case "show_damage": jquery(".item-damage").remove(); break; case "fullscreen": value ? this.launchFullScreen() : this.exitFullscreen(); break; case "show_command": Process.itemsElement.find(".item-commands").remove(); break; case "no_spmsg": jquery(Process.ChannelElement)[value ? "hide" : "show"](); break; } },
       save(key, value) {
+        if (key === "auto_work") {
+          value = value === "0" ? 0 : value === "1" || value === "" || (typeof value === "string" && !value.trim()) ? 1 : value;
+          autoWorkPreference(value);
+        }
         this[key] = value;
         this.set_prop(key, value);
         if (key === "auto_work") {
@@ -57,6 +69,15 @@
           }
         }
         context.sendCommand("setting " + key + " " + value);
+      },
+      restoreAutoWork() {
+        autoWorkState = false;
+        const preference = autoWorkPreference();
+        const legacy = storedScript();
+        const value = preference ? preference.value : isClientScript(legacy) ? legacy : this.auto_work;
+        // Reapply the role's explicit choice even when the server returns its
+        // default marker. In particular, a server 1 must not delete a script.
+        if (preference || isClientScript(value)) this.save("auto_work", value);
       },
       observeAutoWorkCommand(command) {
         if (/(?:^|;)\s*(?:stopstate|state\s+stop)\s*(?:;|$)/.test(String(command || "")))
@@ -69,7 +90,10 @@
         if (title || !wasTraining || !isClientScript(this.auto_work)) return;
         if (context.isConnected && !context.isConnected()) return;
         const script = context.getScript && context.getScript();
-        if (script) return script.run(this.auto_work.trim());
+        if (script) {
+          const command = this.auto_work.trim();
+          return script.run(/^[#_]/.test(command) ? command : "#" + command);
+        }
       },
       launchFullScreen(element = documentRef.documentElement) { const method = ["requestFullscreen", "mozRequestFullScreen", "webkitRequestFullscreen", "msRequestFullscreen"].find((name) => element[name]); if (method) element[method](); },
       exitFullscreen() { const method = ["exitFullscreen", "mozCancelFullScreen", "webkitExitFullscreen"].find((name) => documentRef[name]); if (method) documentRef[method](); },

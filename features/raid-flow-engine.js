@@ -707,6 +707,7 @@
       init: function () {
         (WG.add_hook("login", function (e) {
           Role.resetSkillCooldowns(null, true);
+          Role._dungeonCooldownPending = false;
           SkillStateMachine.reset();
           ((Role.id = e.id),
             (Role.status = []),
@@ -1138,7 +1139,7 @@
       _monitorCombat: function () {
         (WG.add_hook("combat", function (e) {
           null != e.start && 1 == e.start
-            ? (Role.combating = !0)
+            ? ((Role.combating = !0), (Role._dungeonCooldownPending = true))
             : null != e.end && 1 == e.end && (Role.combating = !1);
         }),
           WG.add_hook("text", function (e) {
@@ -1149,7 +1150,7 @@
                 (Role.combating = !1),
               -1 != e.msg.indexOf("战斗中打坐，你找死吗？") ||
                 -1 != e.msg.indexOf("你正在战斗")) &&
-              (Role.combating = !0);
+              ((Role.combating = !0), (Role._dungeonCooldownPending = true));
           }));
       },
       _monitorWeapon: function () {
@@ -1447,6 +1448,25 @@
         },
       );
       CmdExecuteCenter.addExecutor(e);
+    })(),
+    (() => {
+      const waitForBattleCooldown = new UntilAtCmdExecutor("dungeonCooldown", function () {
+        if (Role.combating || Role.hasCoolingSkill()) return false;
+        Role._dungeonCooldownPending = false;
+        return true;
+      });
+      CmdExecuteCenter.addExecutor(new AtCmdExecutor("dungeonCooldown", function (owner) {
+        // No polling, timers or cooldown queries between completed battles.
+        if (owner._dungeonFinalBattleDone || !Role._dungeonCooldownPending) return;
+        return waitForBattleCooldown.execute(owner, "@dungeonCooldown");
+      }));
+      CmdExecuteCenter.addExecutor(new AtCmdExecutor("dungeonRouteStart", function (owner) {
+        owner._dungeonFinalBattleDone = false;
+      }));
+      CmdExecuteCenter.addExecutor(new AtCmdExecutor("dungeonFinalBattleDone", function (owner) {
+        owner._dungeonFinalBattleDone = true;
+        Role._dungeonCooldownPending = false;
+      }));
     })());
   var __RecordGainsFrom = null;
   ((() => {
@@ -1610,11 +1630,17 @@
           var o = t.split(","),
             n = [];
           for (let t = 0; t < o.length; t++) {
-            const r = o[t];
+            let r = o[t];
             let e = !0;
             ("%" == r.substring(r.length - 1) &&
               ((r = r.substring(0, r.length - 1)), (e = !1)),
               n.push({ name: r, blurry: e }));
+          }
+          if (typeof WG.enterOverlayDungeon === "function") {
+            if (Room.didKillOverlayItemsInRoom(n)) return !0;
+            const targets = Room.getOverlayKillTargets(n);
+            if (targets.length) WG.SendCmd(targets.map((item) => "kill " + item.id).join(";"));
+            return !1;
           }
           if (Room.didKillItemsInRoom(n)) return !0;
           {
@@ -1725,13 +1751,36 @@
       return null;
     };
   function InjectRoomTransitionRecovery(dungeonSource) {
-    return dungeonSource.replace(
+    const withRecovery = dungeonSource.replace(
       /^([ \t]*)(go\s+.+)$/gm,
       "$1[if] (:mpPer) < (mpPer)\n$1    @dazuo\n$1$2",
     );
+    const waitForCooldown = (indent) =>
+      `${indent}@dungeonCooldown`;
+    const battles = [...withRecovery.matchAll(/^[ \t]*@kill\s[^\r\n]+/gm)];
+    const finalBattleOffset = battles.length ? battles[battles.length - 1].index : -1;
+    return "@dungeonRouteStart\n" + withRecovery.replace(/^([ \t]*)([^\r\n]+)$/gm, (line, indent, command, offset) => {
+      if (offset === finalBattleOffset) {
+        // Loot, cleanup and the return route can cover the final battle's CD.
+        return `${line}\n${indent}@dungeonFinalBattleDone`;
+      }
+      // Expand chained/repeated movement only for the enabled branch, so an
+      // auto-aggro fight on an intermediate tile cannot bypass the next wait.
+      if (/^[@#$\[<]/.test(command) || !/(^|;)\s*go\s/.test(command)) return line;
+      const steps = UnpackSystemCmd(command).split(";").map((step) => {
+        step = step.trim();
+        const prefix = indent + "    ";
+        return (/^go\s/.test(step) ? waitForCooldown(prefix) + "\n" : "") + prefix + step;
+      });
+      return `${indent}[if] (_DungeonWaitAllSkillCD) == 打开\n${steps.join("\n")}\n${indent}[else]\n${indent}    ${command}`;
+    });
   }
   function GetDungeonSource(e) {
+    const dungeonName = e;
     e = GetDungeonFlow(e);
+    if (e && unsafeWindow.WG && typeof unsafeWindow.WG.enterOverlayDungeon === 'function')
+      e = e.replace(/^([ \t]*)jh fb \d+ start([123]);cr [^;\r\n]+;?/m,
+        (_line, indent, mode) => indent + '@overlayDungeonEntry ' + dungeonName.replace(/\([^)]*\)$/, '') + '|' + (Number(mode) - 1) + '\n' + indent);
     return null == e
       ? null
       : `
@@ -1741,6 +1790,8 @@
     ($_DungeonMpThreshold) = 80
 [if] (_DungeonWaitSkillCD) == null
     ($_DungeonWaitSkillCD) = 打开
+[if] (_DungeonWaitAllSkillCD) == null
+    ($_DungeonWaitAllSkillCD) = 关闭
 [if] (_DungeonBagCleanWay) == null
     ($_DungeonBagCleanWay) = 存仓及售卖
 [if] (_DungeonRecordGains) == null
@@ -1748,6 +1799,7 @@
 #select ($_DungeonHpThreshold) = 副本内疗伤，当气血低于百分比,100|90|80|70|60|50|40|30|20|10,(_DungeonHpThreshold)
 #select ($_DungeonMpThreshold) = 进入下一房间前打坐，当内力低于百分比,100|90|80|70|60|50|40|30|20|10,(_DungeonMpThreshold)
 #select ($_DungeonWaitSkillCD) = Boss战前等待技能冷却,打开|关闭,(_DungeonWaitSkillCD)
+#select ($_DungeonWaitAllSkillCD) = 每场战斗后等待技能冷却（移动前）,打开|关闭,(_DungeonWaitAllSkillCD)
 #select ($_DungeonBagCleanWay) = 背包清理方案,不清理|售卖|存仓及售卖,(_DungeonBagCleanWay)
 #select ($_DungeonRecordGains) = 结束后显示收益统计,是|否,(_DungeonRecordGains)
 #input ($_repeat) = 重复次数,1
@@ -1796,6 +1848,10 @@ $to 住房-练功房;dazuo
 stopSSAuto->`;
   }
   (() => {
+    CmdExecuteCenter.addExecutor(new AtCmdExecutor('overlayDungeonEntry', function (owner, parameters) {
+      const split = parameters.lastIndexOf('|');
+      return unsafeWindow.WG.enterOverlayDungeon(parameters.slice(0, split), Number(parameters.slice(split + 1)), owner);
+    }));
     var e = new AtCmdExecutor("fb", function (e, t) {
       let n = AutoDungeonName(t);
       if (null != n) {
@@ -1849,7 +1905,7 @@ stopSSAuto->`;
           .text("‹");
         return;
       }
-      UI._toolbarHidden &&
+      $(".WG_log").length &&
         ((UI._toolbarHidden = !1),
         $(".WG_log").before(`
             <style>
@@ -1917,6 +1973,7 @@ stopSSAuto->`;
         `
             <span class = "zdy-item xianyu-xyjq" style="width:120px; height:30px; line-height:30px; border-radius:0.5em;"> 🤌 襄阳捐钱 </span>
             <span class = "zdy-item xianyu-ksyb" style="width:120px; height:30px; line-height:30px; border-radius:0.5em;"> 🦆 快速运镖 </span>
+            ${typeof WG.enterOverlayDungeon === "function" ? '<span class="zdy-item auto-yunbiao" style="width:120px; height:30px; line-height:30px; border-radius:0.5em;">自动运镖</span>' : ''}
             <span class="zdy-item xianyu-sdyt" style="width:120px; height:30px; line-height:30px; border-radius:0.5em;"> 🐉 扫荡妖塔</span>
             <span class="zdy-item xianyu-mghyj" style="width:120px; height:30px; line-height:30px; border-radius:0.5em;"> 🍟 门贡换元晶</span>
             <br><br>
@@ -1940,6 +1997,9 @@ stopSSAuto->`;
         }),
         $(".xianyu-ksyb").on("click", function () {
           DungeonsShortcuts.xianyu_ksyb();
+        }),
+        $(".auto-yunbiao").on("click", function () {
+          DungeonsShortcuts.auto_yunbiao();
         }),
         $(".xianyu-sdyt").on("click", function () {
           DungeonsShortcuts.xianyu_sdyt();
@@ -2578,6 +2638,18 @@ stopSSAuto->`;
         Performer: Performer,
         THIsland: THIsland,
         registerAtCommand: registerRaidShortcutAtCommand,
+        getWG: () => WG,
+        getRole: () => Role,
+        getRoom: () => Room,
+        getStore: () => unsafeWindow.WSStore,
+        jquery: $,
+        getSetting: () => unsafeWindow.Setting,
+        getSessionRoleId: () => unsafeWindow.G.id,
+        restoreAutoWork: (value) => unsafeWindow.Setting.save('auto_work', value),
+        updateVariable: UpdateVariable,
+        appendMessage: (text) => Message.append(text),
+        isOverlay: () => typeof WG.enterOverlayDungeon === "function",
+        startManaged: (name, source) => ManagedPerformerCenter.start(name, source, true),
       },
     ),
     DungeonsShortcuts = raidFlowShortcuts.DungeonsShortcuts,

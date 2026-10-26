@@ -56,6 +56,22 @@
           }
           return !0;
         },
+        // Overlay dungeons may change the number of identically named NPCs.
+        // Require a confirmed death for every requested kind, then exhaust
+        // the actual living targets rather than a count from the old route.
+        getOverlayKillTargets: function (expected) {
+          const deadIds = new Set(this._deadItemsInRoom.map((item) => String(item.id)));
+          return Object.values(this._itemsInRoom).filter((item) =>
+            !item.p && !item.me && !deadIds.has(String(item.id)) &&
+            (item.hp == null || Number(item.hp) > 0) &&
+            !item.name.includes("的尸体") &&
+            expected.some((target) => target.blurry ? item.name.includes(target.name) : item.name === target.name));
+        },
+        didKillOverlayItemsInRoom: function (expected) {
+          return this.getOverlayKillTargets(expected).length === 0 && expected.every((target) =>
+            this._deadItemsInRoom.some((item) => !item.p && !item.me && !item.name.includes("的尸体") &&
+              (target.blurry ? item.name.includes(target.name) : item.name === target.name)));
+        },
         _itemsInRoom: {},
         _deadItemsInRoom: [],
         _monitorLocation: function () {

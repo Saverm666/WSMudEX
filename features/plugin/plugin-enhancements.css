@@ -1360,6 +1360,13 @@ body.WG_map_modal_open {
 .dialog.WG_floating_dialog.WG_item_popup_secondary {
     z-index: var(--WG-dialog-z, 2147483601) !important;
 }
+.WG_item_popup_dialog.WG_overlay_detail {
+    min-width: min(18em, calc(100vw - 2em));
+    box-sizing: border-box;
+    resize: both;
+    right: auto;
+    bottom: auto;
+}
 .dialog.WG_floating_dialog > .dialog-header {
     flex: 0 0 auto;
     cursor: move;
@@ -1434,6 +1441,21 @@ body.WG_map_modal_open {
     float: none;
     flex: 1 1 0;
 }
+.dialog.WG_floating_dialog .dialog-list.store-mode > .otype-list {
+    flex: 0 0 6em;
+    overflow-x: hidden;
+}
+.dialog.WG_floating_dialog .dialog-list.store-mode > .otype-list > .otype-item {
+    box-sizing: border-box;
+    width: calc(100% - 1em);
+    max-width: calc(100% - 1em);
+}
+.dialog.WG_floating_dialog .dialog-list > .trade-list,
+.dialog.WG_floating_dialog .dialog-list > .obj-list {
+    flex: 1 1 0;
+    width: auto;
+    float: none;
+}
 .dialog.WG_floating_dialog > .dialog-footer {
     min-width: 0;
     flex: 0 0 auto;
@@ -1447,6 +1469,54 @@ body.WG_map_modal_open {
     margin-left: auto;
     padding-left: 1rem;
     white-space: nowrap;
+}
+.dialog.WG_floating_dialog > .dialog-footer:has(> [for="extend"].select) {
+    display: flex;
+    flex-wrap: wrap;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    white-space: normal;
+}
+.WG_extend_toolbar.obj-money {
+    box-sizing: border-box;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    justify-content: flex-end;
+    float: none;
+    min-width: 0;
+    min-height: 2.5em;
+    margin: 0;
+    padding: 0.5em;
+    border-bottom: 1px solid #343434;
+    background: #181818;
+}
+.WG_extend_toolbar.obj-money > button {
+    flex: 0 0 auto;
+    min-height: 2.3em;
+    margin: 0;
+    padding: 0.2em 0.8em;
+    border: 1px solid #555;
+    border-radius: 3px;
+    background: #242424;
+    color: #d5d5d5;
+    font: inherit;
+    line-height: 1.5;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.WG_extend_toolbar.obj-money > button[for="add"] {
+    border-color: #8b914b;
+    color: #dde3a0;
+}
+.WG_extend_toolbar.obj-money > button:hover {
+    background: #383838;
+}
+.WG_extend_toolbar.obj-money > button:focus-visible {
+    outline: 2px solid #d5d5d5;
+    outline-offset: 2px;
 }
 .dialog.WG_floating_dialog .dialog-skills {
     box-sizing: border-box;
@@ -1633,6 +1703,14 @@ body.WG_map_modal_open {
     overflow: hidden;
     background: #090909;
 }
+.dialog-confirm.WG_overlay_confirm {
+    left: var(--WG-confirm-left) !important;
+    width: var(--WG-confirm-width) !important;
+    max-width: calc(100vw - 20px) !important;
+    right: auto !important;
+    transform: none !important;
+    z-index: 2147483640 !important;
+}
 .dialog-confirm.WG_skills_confirm {
     position: fixed !important;
     z-index: 2147483640 !important;
@@ -1646,6 +1724,11 @@ body.WG_map_modal_open {
     border-radius: 0.3rem;
     background: #111 !important;
     box-shadow: 0 0.8rem 2.2rem rgba(0, 0, 0, 0.78);
+}
+@media (max-width: 767px) {
+    .dialog.WG_floating_dialog .dialog-list.store-mode > .otype-list {
+        flex-basis: 3em;
+    }
 }
 .dialog-confirm.WG_skills_confirm > .dialog-content {
     min-width: 0;
@@ -2424,4 +2507,96 @@ white-space: pre-line;
   margin: 0;
   padding: 0 8px;
   white-space: nowrap;
+}
+.combat-commands .pfm-item:has(.WG_mimic_caption) {
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.WG_mimic_dialog.WG_item_popup_dialog {
+    z-index: 2147483610;
+    box-sizing: border-box;
+    min-width: min(18em, calc(100vw - 2em));
+    max-width: calc(100vw - 2em);
+    resize: both;
+    line-height: 1.5;
+}
+.WG_mimic_dialog > .WG_item_popup_body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-wrap: anywhere;
+}
+.WG_mimic_footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5em 0.75em;
+    border-top: 1px solid #343434;
+    background: #111;
+}
+.WG_mimic_open, .WG_mimic_retry {
+    display: inline-block;
+    min-width: 2.5em;
+    margin: 0.25em 0.625em 0.25em 0;
+    padding: 0.25em 1em;
+    border: 1px solid gray;
+    border-radius: 0.25em;
+    background: black;
+    color: gray;
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+}
+.WG_mimic_open:active, .WG_mimic_retry:active {
+    background: gray;
+    color: black;
+}
+.dialog.WG_floating_dialog .dialog-skills > .item-commands > .WG_mimic_open {
+    margin: 0;
+}
+.WG_mimic_dialog button:focus-visible, .WG_mimic_open:focus-visible {
+    outline: 1px solid #aaa;
+    outline-offset: -3px;
+}
+.WG_mimic_retry {
+    width: 2.5em;
+    height: 2.25em;
+    margin: 0;
+    padding: 0;
+}
+.WG_mimic_dialog pre {
+    max-width: 100%;
+    margin: 0.5em 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font: inherit;
+}
+.WG_mimic_result {
+    padding: 0.75em 0;
+    border-top: 1px solid #343434;
+}
+.WG_mimic_result h3 {
+    margin: 0;
+    font-size: 1em;
+    font-weight: normal;
+    color: inherit;
+}
+.WG_mimic_status {
+    margin: 0 0 0.75em;
+    color: gray;
+}
+.WG_mimic_result p {
+    margin: 0.6em 0;
+}
+.WG_mimic_dialog details {
+    color: #999;
+}
+.WG_mimic_dialog summary {
+    cursor: pointer;
+}
+.WG_mimic_notice {
+    margin: 0.75em 0 0;
+    color: gray;
+    font-size: 0.85em;
 }
